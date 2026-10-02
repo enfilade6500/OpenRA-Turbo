@@ -202,6 +202,8 @@ namespace OpenRA
 			using (new PerfTimer("LoadComplete"))
 				OrderManager.World.LoadComplete(worldRenderer);
 
+			Support.LiveBench.OnWorldLoaded(OrderManager.World);
+
 			// Proactively collect memory during loading to reduce peak memory.
 			GC.Collect();
 
@@ -349,6 +351,7 @@ namespace OpenRA
 			}
 
 			InitializeSettings(args);
+			Support.LiveBench.Configure(args);
 
 			Log.AddChannel("perf", "perf.log");
 			Log.AddChannel("debug", "debug.log");
@@ -412,7 +415,8 @@ namespace OpenRA
 					launchPath = launchPath[1..^1];
 
 				// Metadata registration requires an explicit launch path
-				if (launchPath != null)
+				// (a benchmark copy of the game must not register itself over the player's installation)
+				if (launchPath != null && !Support.LiveBench.Active)
 					ExternalMods.Register(Mods[modID], launchPath, launchArgs, ModRegistration.User);
 
 				ExternalMods.ClearInvalidRegistrations(ModRegistration.User);
@@ -677,6 +681,8 @@ namespace OpenRA
 
 		static void RenderTick()
 		{
+			var benchStart = Support.LiveBench.Active ? Stopwatch.GetTimestamp() : 0L;
+			long benchBegin = 0, benchFlip = 0;
 			using (new PerfSample("render"))
 			{
 				++RenderFrame;
@@ -702,10 +708,14 @@ namespace OpenRA
 				// Use worldRenderer.World instead of OrderManager.World to avoid a rendering mismatch while processing orders
 				if (worldRenderer != null && !worldRenderer.World.IsLoadingGameSave)
 				{
+					var t0 = benchStart != 0 ? Stopwatch.GetTimestamp() : 0L;
 					Renderer.BeginWorld(worldRenderer.Viewport.Rectangle);
+					if (t0 != 0)
+						benchBegin = Stopwatch.GetTimestamp() - t0;
 					Sound.SetListenerPosition(worldRenderer.Viewport.CenterPosition);
 					using (new PerfSample("render_world"))
-						worldRenderer.Draw();
+						for (var i = 0; i < Support.LiveBench.RenderRepeat; i++)
+							worldRenderer.Draw();
 				}
 
 				using (new PerfSample("render_widgets"))
@@ -730,7 +740,12 @@ namespace OpenRA
 				}
 
 				using (new PerfSample("render_flip"))
+				{
+					var t0 = benchStart != 0 ? Stopwatch.GetTimestamp() : 0L;
 					Renderer.EndFrame(new DefaultInputHandler(OrderManager.World));
+					if (t0 != 0)
+						benchFlip = Stopwatch.GetTimestamp() - t0;
+				}
 
 				if (takeScreenshot)
 				{
@@ -745,6 +760,12 @@ namespace OpenRA
 			PerfHistory.Items["render_widgets"].Tick();
 			PerfHistory.Items["render_flip"].Tick();
 			PerfHistory.Items["terrain_lighting"].Tick();
+
+			if (benchStart != 0)
+			{
+				var ms = 1000.0 / Stopwatch.Frequency;
+				Support.LiveBench.AfterRender((Stopwatch.GetTimestamp() - benchStart) * ms, benchBegin * ms, benchFlip * ms);
+			}
 		}
 
 		static void Loop()
@@ -828,7 +849,10 @@ namespace OpenRA
 
 				// If the logic has fallen behind too much, skip it and catch up
 				if (now - nextLogic > MaxLogicTicksBehind)
+				{
 					nextLogic = now;
+					Support.LiveBench.NoteLogicReset();
+				}
 
 				// When's the next update (logic or render)
 				var nextUpdate = Math.Min(nextLogic, nextRender);
@@ -836,20 +860,27 @@ namespace OpenRA
 				{
 					if (now >= nextLogic && !renderBeforeNextTick)
 					{
+						Support.LiveBench.BeforeLogic(now - nextLogic);
 						nextLogic += logicInterval;
 
 						LogicTick();
+						Support.LiveBench.AfterLogic(OrderManager.World, worldRenderer);
 
 						// The decisions below are about the time left after the tick, not before it
 						now = RunTime;
 
-						// Force at least one render per tick during regular gameplay, unless the simulation is behind:
-						// when the next tick is already due by the time this one is done, drawing now would only put the
-						// simulation further behind, so frames are skipped until it has caught up, but never for longer
-						// than the minimum frame rate allows (forcedNextRender below). A forced developer frame rate is
-						// never exceeded either.
-						if (OrderManager.World != null && !OrderManager.World.IsLoadingGameSave && !OrderManager.World.IsReplay)
-							renderBeforeNextTick = forceFramerate == 0 && now < nextLogic;
+						// Force at least one render per tick during regular gameplay (and in a replay that is benchmarked
+						// as one), unless the simulation is behind: when the next tick is already due by the time this one
+						// is done, drawing now would only put the simulation further behind, so frames are skipped until it
+						// has caught up, but never for longer than the minimum frame rate allows (forcedNextRender below).
+						// A forced developer frame rate is never exceeded either. A benchmark can ask for the old
+						// behaviour, a frame after every tick whatever the time (Bench.NoFrameSkip), for comparison.
+						if (OrderManager.World != null && !OrderManager.World.IsLoadingGameSave && (!OrderManager.World.IsReplay || Support.LiveBench.Measuring))
+						{
+							renderBeforeNextTick = forceFramerate == 0 && (now < nextLogic || Support.LiveBench.NoFrameSkip);
+							if (!renderBeforeNextTick && forceFramerate == 0)
+								Support.LiveBench.NoteSkippedFrame();
+						}
 					}
 
 					var forceRender = renderBeforeNextTick || now >= forcedNextRender;

@@ -375,6 +375,10 @@ namespace OpenRA
 
 		public void Save()
 		{
+			// A benchmark run is given its settings on the command line and must not write them into the player's file
+			if (Support.LiveBench.Active)
+				return;
+
 			var yamlCacheBuilder = yamlCache.ConvertAll(n => new MiniYamlNodeBuilder(n));
 			foreach (var kv in Sections)
 			{

@@ -87,6 +87,7 @@ namespace OpenRA.Network
 			if (IsOutOfSync)
 				return;
 
+			Support.LiveBench.NoteDesync(frame);
 			syncReport.DumpSyncReport(frame);
 			World.OutOfSync();
 			IsOutOfSync = true;

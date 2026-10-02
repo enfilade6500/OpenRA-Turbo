@@ -38,6 +38,7 @@ namespace OpenRA.Support
 	///                          skipped while the simulation is behind (Graphics.MinFramerate), for comparison
 	///   Bench.RenderRepeat=n   draw the world n times per frame, to behave like a weaker graphics card (default 1)
 	///   Bench.Zoom=z           viewport zoom while measuring (default: leave the player's)
+	///   Bench.Timestep=ms      play at this many ms per tick instead of the replay's game speed (30 = "faster", 40 = normal)
 	/// Display settings are given the usual way: Graphics.VSync=False Graphics.Mode=Windowed Graphics.CapFramerate=True ...
 	/// </summary>
 	public static class LiveBench
@@ -48,7 +49,7 @@ namespace OpenRA.Support
 		public static int RenderRepeat { get; private set; } = 1;
 
 		static string outDir, name;
-		static int warpToTick, durationTicks;
+		static int warpToTick, durationTicks, timestepOverride, measureTimestep = 40;
 		static float logicFloorMs, ballastMs, zoom;
 
 		static readonly Stopwatch Clock = Stopwatch.StartNew();
@@ -90,6 +91,7 @@ namespace OpenRA.Support
 			NoFrameSkip = args.GetValue("Bench.NoFrameSkip", "false").Equals("true", StringComparison.OrdinalIgnoreCase);
 			RenderRepeat = Math.Max(1, (int)Parse(args.GetValue("Bench.RenderRepeat", "1")));
 			zoom = Parse(args.GetValue("Bench.Zoom", "0"));
+			timestepOverride = (int)Parse(args.GetValue("Bench.Timestep", "0"));
 			replayPath = args.GetValue("Launch.Replay", "");
 
 			Directory.CreateDirectory(outDir);
@@ -192,7 +194,8 @@ namespace OpenRA.Support
 			Measuring = true;
 			firstMeasuredTick = world.WorldTick;
 			measureStart = tickStart;
-			world.ReplayTimestep = world.Timestep;
+			measureTimestep = timestepOverride > 0 ? timestepOverride : world.Timestep;
+			world.ReplayTimestep = measureTimestep;
 
 			if (wr != null)
 			{
@@ -296,8 +299,7 @@ namespace OpenRA.Support
 				intervals.Add(Records[i].Start - Records[i - 1].Start);
 			intervals.Sort();
 
-			var timestep = Game.OrderManager?.World?.Timestep ?? 40;
-			var capacity = wall > 0 ? 100.0 * n * timestep / wall : 0;
+			var capacity = wall > 0 ? 100.0 * n * measureTimestep / wall : 0;
 			var frames = Records.Sum(r => r.Frames);
 			var skipped = Records.Sum(r => r.Skipped);
 			var lateTicks = Records.Count(r => r.Late >= 5);
@@ -318,6 +320,7 @@ namespace OpenRA.Support
 				["max_framerate"] = g.MaxFramerate,
 				["cap_to_tick"] = g.CapFramerateToGameFps,
 				["warp_to_tick"] = warpToTick,
+				["timestep_ms"] = measureTimestep,
 				["logic_floor_ms"] = logicFloorMs,
 				["ballast_ms"] = ballastMs,
 				["no_frame_skip"] = NoFrameSkip,
@@ -366,14 +369,14 @@ namespace OpenRA.Support
 			File.WriteAllText(Path.Combine(outDir, name + ".json"), json.ToString());
 
 			var line = string.Format(c,
-				"{0,-22} {1,-16} {2,-5} {3,5} {4,5} {5,4} {6,3} | ticks {7,5} capacity {8,6:F1}% interval {9,5:F1} p95 {10,5:F1} | " +
+				"{0,-26} {21,2}ms {1,-16} {2,-5} {3,5} {4,5} {5,4} {6,3} | ticks {7,5} capacity {8,6:F1}% interval {9,5:F1} p95 {10,5:F1} | " +
 				"logic {11,5:F1} pad {12,4:F1} render {13,5:F1} begin {14,4:F1} flip {15,5:F1} | fps {16,5:F1} skipped {17,4} late {18,4:F0}% resets {19} | {20}",
 				name, g.Mode, g.VSync ? "vsync" : "-", g.CapFramerateToGameFps ? "tick" : g.CapFramerate ? g.MaxFramerate.ToString(c) : "-",
 				logicFloorMs > 0 ? "L" + logicFloorMs.ToString("F0", c) : ballastMs > 0 ? "B" + ballastMs.ToString("F0", c) : "-",
 				NoFrameSkip ? "noskip" : "-", RenderRepeat > 1 ? "x" + RenderRepeat : "",
 				n, capacity, summary["interval_mean_ms"], summary["interval_p95_ms"],
 				summary["logic_mean_ms"], summary["pad_mean_ms"], summary["render_mean_ms"], summary["begin_mean_ms"], summary["flip_mean_ms"],
-				summary["fps"], skipped, summary["late_ticks_pct"], resets, finishReason);
+				summary["fps"], skipped, summary["late_ticks_pct"], resets, finishReason, measureTimestep);
 			File.AppendAllText(Path.Combine(outDir, "summary.txt"), line + "\n");
 			Console.WriteLine(line);
 		}

@@ -37,7 +37,9 @@ namespace OpenRA.Support
 	///   Bench.NoFrameSkip=true draw a frame after every tick whatever the time, as the game did before frames were
 	///                          skipped while the simulation is behind (Graphics.MinFramerate), for comparison
 	///   Bench.RenderRepeat=n   draw the world n times per frame, to behave like a weaker graphics card (default 1)
-	///   Bench.Zoom=z           viewport zoom while measuring (default: leave the player's)
+	///   Bench.Zoom=z           viewport zoom while measuring: a number (screen px per world px), or "map" to fit the whole map
+	///                          on the screen (default: the zoom the Battlefield Camera setting gives; Graphics.ViewportDistance=Far
+	///                          selects another setting for the run)
 	///   Bench.Timestep=ms      play at this many ms per tick instead of the replay's game speed (30 = "faster", 40 = normal)
 	/// Display settings are given the usual way: Graphics.VSync=False Graphics.Mode=Windowed Graphics.CapFramerate=True ...
 	/// </summary>
@@ -50,7 +52,9 @@ namespace OpenRA.Support
 
 		static string outDir, name;
 		static int warpToTick, durationTicks, timestepOverride, measureTimestep = 40;
-		static float logicFloorMs, ballastMs, zoom;
+		static float logicFloorMs, ballastMs, zoom, zoomUsed;
+		static bool zoomToMap;
+		static WPos mapCentre;
 
 		static readonly Stopwatch Clock = Stopwatch.StartNew();
 		static double Now => Clock.Elapsed.TotalMilliseconds;
@@ -61,6 +65,7 @@ namespace OpenRA.Support
 			public double Start, Late, Logic, Pad;
 			public int Frames, Skipped;
 			public double Render, Begin, Flip;
+			public int Actors, InView;
 		}
 
 		/// <summary>Ticks after the switch to measuring that are written to the CSV but left out of the summary (the first frames
@@ -90,7 +95,9 @@ namespace OpenRA.Support
 			ballastMs = Parse(args.GetValue("Bench.Ballast", "0"));
 			NoFrameSkip = args.GetValue("Bench.NoFrameSkip", "false").Equals("true", StringComparison.OrdinalIgnoreCase);
 			RenderRepeat = Math.Max(1, (int)Parse(args.GetValue("Bench.RenderRepeat", "1")));
-			zoom = Parse(args.GetValue("Bench.Zoom", "0"));
+			var zoomArg = args.GetValue("Bench.Zoom", "0");
+			zoomToMap = zoomArg.Equals("map", StringComparison.OrdinalIgnoreCase);
+			zoom = zoomToMap ? 0 : Parse(zoomArg);
 			timestepOverride = (int)Parse(args.GetValue("Bench.Timestep", "0"));
 			replayPath = args.GetValue("Launch.Replay", "");
 
@@ -177,8 +184,17 @@ namespace OpenRA.Support
 				Start = tickStart,
 				Late = pendingLate,
 				Logic = logic,
-				Pad = Math.Max(0, target - logic)
+				Pad = Math.Max(0, target - logic),
+				Actors = world.Actors.Count()
 			};
+
+			// Keep the camera where it was put, whatever the mouse does, and count what the frame has to draw: the actors the
+			// renderer picks for the viewport
+			if (wr != null)
+			{
+				wr.Viewport.Center(mapCentre);
+				current.InView = world.ScreenMap.RenderableActorsInBox(wr.Viewport.TopLeft, wr.Viewport.BottomRight).Count();
+			}
 			AllRecords.Add(current);
 			if (AllRecords.Count > 1)
 				WriteCsv(AllRecords[^2], current.Start);
@@ -201,14 +217,34 @@ namespace OpenRA.Support
 			{
 				var tl = world.Map.ProjectedTopLeft;
 				var br = world.Map.ProjectedBottomRight;
-				wr.Viewport.Center(new WPos((tl.X + br.X) / 2, (tl.Y + br.Y) / 2, 0));
-				if (zoom > 0)
-					wr.Viewport.AdjustZoom((float)Math.Log(zoom / wr.Viewport.Zoom));
+				mapCentre = new WPos((tl.X + br.X) / 2, (tl.Y + br.Y) / 2, 0);
+				wr.Viewport.Center(mapCentre);
+
+				var target = zoom;
+				if (zoomToMap)
+				{
+					// The zoom at which the whole map fits on the screen
+					var size = wr.ScreenPxPosition(br) - wr.ScreenPxPosition(tl);
+					var res = Game.Renderer.NativeResolution;
+					target = Math.Min((float)res.Width / size.X, (float)res.Height / size.Y);
+				}
+
+				if (target > 0)
+				{
+					// Zooming out past the camera setting is normally reserved for spectators (by a factor of two);
+					// allow whatever the run asks for
+					if (target < wr.Viewport.MinZoom)
+						wr.Viewport.UnlockMinimumZoom(0.999f * target / wr.Viewport.MinZoom);
+					wr.Viewport.AdjustZoom((float)Math.Log(target / wr.Viewport.Zoom));
+				}
+
+				zoomUsed = wr.Viewport.Zoom;
 			}
 
 			csv = new StreamWriter(Path.Combine(outDir, name + ".csv"), false, Encoding.ASCII);
-			csv.WriteLine("tick,t_ms,late_ms,logic_ms,pad_ms,interval_ms,frames,skipped,render_ms,begin_ms,flip_ms");
-			Console.WriteLine($"LiveBench: measuring from tick {firstMeasuredTick}");
+			csv.WriteLine("tick,t_ms,late_ms,logic_ms,pad_ms,interval_ms,frames,skipped,render_ms,begin_ms,flip_ms,actors,in_view");
+			var clock = TimeSpan.FromMilliseconds((double)firstMeasuredTick * world.Timestep);
+			Console.WriteLine($"LiveBench: measuring from tick {firstMeasuredTick} (game clock {clock:m\\:ss}) at zoom {zoomUsed:F3}");
 		}
 
 		static void WriteCsv(TickRecord r, double nextStart)
@@ -217,7 +253,7 @@ namespace OpenRA.Support
 			csv?.WriteLine(string.Join(",",
 				r.Tick.ToString(c), (r.Start - measureStart).ToString("F1", c), r.Late.ToString("F1", c), r.Logic.ToString("F2", c),
 				r.Pad.ToString("F2", c), (nextStart - r.Start).ToString("F2", c), r.Frames.ToString(c), r.Skipped.ToString(c),
-				r.Render.ToString("F2", c), r.Begin.ToString("F2", c), r.Flip.ToString("F2", c)));
+				r.Render.ToString("F2", c), r.Begin.ToString("F2", c), r.Flip.ToString("F2", c), r.Actors.ToString(c), r.InView.ToString(c)));
 		}
 
 		/// <summary>A frame was drawn; the times are what the main thread spent in it, in starting the world pass, and in the hand-off.</summary>
@@ -325,7 +361,11 @@ namespace OpenRA.Support
 				["ballast_ms"] = ballastMs,
 				["no_frame_skip"] = NoFrameSkip,
 				["render_repeat"] = RenderRepeat,
-				["zoom"] = zoom,
+				["zoom"] = zoomUsed,
+				["zoom_arg"] = zoomToMap ? "map" : zoom > 0 ? zoom.ToString("F3", c) : "",
+				["viewport_distance"] = g.ViewportDistance.ToString(),
+				["actors_mean"] = Mean(r => r.Actors),
+				["in_view_mean"] = Mean(r => r.InView),
 				["ticks"] = n,
 				["first_tick"] = firstMeasuredTick + SettleTicks,
 				["wall_s"] = wall / 1000,
@@ -370,13 +410,15 @@ namespace OpenRA.Support
 
 			var line = string.Format(c,
 				"{0,-26} {21,2}ms {1,-16} {2,-5} {3,5} {4,5} {5,4} {6,3} | ticks {7,5} capacity {8,6:F1}% interval {9,5:F1} p95 {10,5:F1} | " +
-				"logic {11,5:F1} pad {12,4:F1} render {13,5:F1} begin {14,4:F1} flip {15,5:F1} | fps {16,5:F1} skipped {17,4} late {18,4:F0}% resets {19} | {20}",
+				"logic {11,5:F1} pad {12,4:F1} render {13,5:F1} begin {14,4:F1} flip {15,5:F1} | fps {16,5:F1} skipped {17,4} late {18,4:F0}% resets {19} | " +
+				"zoom {22,5:F2} view {23,4:F0}/{24,4:F0} | {20}",
 				name, g.Mode, g.VSync ? "vsync" : "-", g.CapFramerateToGameFps ? "tick" : g.CapFramerate ? g.MaxFramerate.ToString(c) : "-",
 				logicFloorMs > 0 ? "L" + logicFloorMs.ToString("F0", c) : ballastMs > 0 ? "B" + ballastMs.ToString("F0", c) : "-",
 				NoFrameSkip ? "noskip" : "-", RenderRepeat > 1 ? "x" + RenderRepeat : "",
 				n, capacity, summary["interval_mean_ms"], summary["interval_p95_ms"],
 				summary["logic_mean_ms"], summary["pad_mean_ms"], summary["render_mean_ms"], summary["begin_mean_ms"], summary["flip_mean_ms"],
-				summary["fps"], skipped, summary["late_ticks_pct"], resets, finishReason, measureTimestep);
+				summary["fps"], skipped, summary["late_ticks_pct"], resets, finishReason, measureTimestep,
+				zoomUsed, summary["in_view_mean"], summary["actors_mean"]);
 			File.AppendAllText(Path.Combine(outDir, "summary.txt"), line + "\n");
 			Console.WriteLine(line);
 		}

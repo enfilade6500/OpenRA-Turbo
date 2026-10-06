@@ -169,6 +169,9 @@ namespace OpenRA.Network
 				syncForFrame.Add(sync.Frame, (sync.SyncHash, sync.DefeatState));
 		}
 
+		/// <summary>The tick scale the server last asked for (1 = the game speed's own timestep). Read by the client bench.</summary>
+		public float TickScale => tickScale;
+
 		public void ReceiveTickScale(float scale)
 		{
 			tickScale = scale;

@@ -934,6 +934,8 @@ namespace OpenRA
 			}
 			finally
 			{
+				Support.LiveBench.OnExit();
+
 				// Ensure that the active replay is properly saved
 				OrderManager?.Dispose();
 			}

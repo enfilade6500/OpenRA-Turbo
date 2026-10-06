@@ -41,11 +41,18 @@ namespace OpenRA.Support
 	///                          on the screen (default: the zoom the Battlefield Camera setting gives; Graphics.ViewportDistance=Far
 	///                          selects another setting for the run)
 	///   Bench.Timestep=ms      play at this many ms per tick instead of the replay's game speed (30 = "faster", 40 = normal)
+	///   Bench.Live=true        record real games instead: play normally, and every multiplayer or skirmish game played in this
+	///                          session is written to Bench.Out as live-&lt;time&gt;-&lt;map&gt;.csv/.json with a line in summary.txt.
+	///                          No warp, no padding, no camera; the other Bench.* options are ignored. Per tick this adds the
+	///                          client's own network state: ticks it wanted but had no orders for (stalls), the net frame, the
+	///                          frames it holds but has not run (queue, as reported to the server in pings) and the tick scale
+	///                          the server asked for.
 	/// Display settings are given the usual way: Graphics.VSync=False Graphics.Mode=Windowed Graphics.CapFramerate=True ...
 	/// </summary>
 	public static class LiveBench
 	{
 		public static bool Active { get; private set; }
+		public static bool Live { get; private set; }
 		public static bool Measuring { get; private set; }
 		public static bool NoFrameSkip { get; private set; }
 		public static int RenderRepeat { get; private set; } = 1;
@@ -66,6 +73,10 @@ namespace OpenRA.Support
 			public int Frames, Skipped;
 			public double Render, Begin, Flip;
 			public int Actors, InView;
+
+			// Live games only
+			public float Zoom, Scale;
+			public int Stalls, Paused, NetFrame, Queue;
 		}
 
 		/// <summary>Ticks after the switch to measuring that are written to the CSV but left out of the summary (the first frames
@@ -88,6 +99,7 @@ namespace OpenRA.Support
 				return;
 
 			Active = true;
+			Live = args.GetValue("Bench.Live", "false").Equals("true", StringComparison.OrdinalIgnoreCase);
 			name = args.GetValue("Bench.Name", "bench");
 			warpToTick = ParseGameTime(args.GetValue("Bench.WarpTo", "0"));
 			durationTicks = ParseGameTime(args.GetValue("Bench.Duration", "0"));
@@ -101,8 +113,18 @@ namespace OpenRA.Support
 			timestepOverride = (int)Parse(args.GetValue("Bench.Timestep", "0"));
 			replayPath = args.GetValue("Launch.Replay", "");
 
+			if (Live)
+			{
+				// Nothing may change how the game plays: this mode only watches (Bench.NoFrameSkip stays, to record real
+				// games with a frame after every tick for comparison; it changes what is drawn, not what is simulated)
+				warpToTick = durationTicks = timestepOverride = 0;
+				logicFloorMs = ballastMs = zoom = 0;
+				RenderRepeat = 1;
+				zoomToMap = false;
+			}
+
 			Directory.CreateDirectory(outDir);
-			Console.WriteLine($"LiveBench: {name} -> {outDir}");
+			Console.WriteLine($"LiveBench: {(Live ? "recording live games" : name)} -> {outDir}");
 		}
 
 		static float Parse(string s) => float.TryParse(s, NumberStyles.Float, CultureInfo.InvariantCulture, out var f) ? f : 0;
@@ -120,7 +142,7 @@ namespace OpenRA.Support
 		/// <summary>The replay has loaded: skip ahead at full speed if asked, otherwise start measuring at once.</summary>
 		public static void OnWorldLoaded(World world)
 		{
-			if (!Active || world == null || !world.IsReplay)
+			if (!Active || Live || world == null || !world.IsReplay)
 				return;
 
 			mapTitle = world.Map.Title;
@@ -142,11 +164,24 @@ namespace OpenRA.Support
 			pendingLate = lateMs;
 		}
 
+		/// <summary>The game is shutting down: a live game still being recorded is written out.</summary>
+		public static void OnExit()
+		{
+			if (Live)
+				LiveGame.Finish("client closed");
+		}
+
 		/// <summary>The logic tick is done: pad it if asked, record it, and decide whether measuring starts or ends here.</summary>
 		public static void AfterLogic(World world, WorldRenderer wr)
 		{
 			if (!Active || finished)
 				return;
+
+			if (Live)
+			{
+				LiveGame.AfterLogic(world, wr);
+				return;
+			}
 
 			// A missing map or replay leaves a dialog on the screen instead of a game; do not wait forever for it
 			if (world == null || !world.IsReplay)
@@ -259,6 +294,12 @@ namespace OpenRA.Support
 		/// <summary>A frame was drawn; the times are what the main thread spent in it, in starting the world pass, and in the hand-off.</summary>
 		public static void AfterRender(double totalMs, double beginMs, double flipMs)
 		{
+			if (Live)
+			{
+				LiveGame.AfterRender(totalMs, beginMs, flipMs);
+				return;
+			}
+
 			if (!Measuring || finished)
 				return;
 
@@ -274,13 +315,17 @@ namespace OpenRA.Support
 
 		public static void NoteSkippedFrame()
 		{
-			if (Measuring && AllRecords.Count > 0)
+			if (Live)
+				LiveGame.NoteSkippedFrame();
+			else if (Measuring && AllRecords.Count > 0)
 				AllRecords[^1].Skipped++;
 		}
 
 		public static void NoteLogicReset()
 		{
-			if (Measuring)
+			if (Live)
+				LiveGame.NoteReset();
+			else if (Measuring)
 				resets++;
 		}
 
@@ -288,6 +333,12 @@ namespace OpenRA.Support
 		{
 			if (!Active)
 				return;
+
+			if (Live)
+			{
+				LiveGame.NoteDesync(frame);
+				return;
+			}
 
 			desyncFrame = frame;
 			Finish($"desync at frame {frame}");
@@ -421,6 +472,273 @@ namespace OpenRA.Support
 				zoomUsed, summary["in_view_mean"], summary["actors_mean"]);
 			File.AppendAllText(Path.Combine(outDir, "summary.txt"), line + "\n");
 			Console.WriteLine(line);
+		}
+
+		/// <summary>
+		/// Records real games as they are played: one CSV per game with the same per-tick columns as the replay bench plus
+		/// the client's network state, a JSON summary, and a line in summary.txt. A game starts being recorded when a regular
+		/// (non-shellmap, non-replay) world first ticks and ends when the world goes away or the client closes.
+		/// </summary>
+		static class LiveGame
+		{
+			static World world, finishedWorld;
+			static StreamWriter csv;
+			static string name, mapTitle, connection;
+			static int timestep, players;
+			static double start, end;
+			static int lastTick = -1, firstTick, stalls, paused, resets, desyncFrame = -1, lastActors, lastInView;
+			static readonly List<TickRecord> Records = new();
+
+			public static void AfterLogic(World w, WorldRenderer wr)
+			{
+				if (w == null || w.Type != WorldType.Regular || w.IsReplay)
+				{
+					if (world != null)
+						Finish("game ended");
+					return;
+				}
+
+				// A world whose recording has ended (a desync) is not recorded again
+				if (w == finishedWorld)
+					return;
+
+				if (w != world)
+				{
+					if (world != null)
+						Finish("game ended");
+					Start(w);
+				}
+
+				// The loop ran a logic step but the world did not advance: waiting for orders over the network, or paused
+				if (w.WorldTick == lastTick)
+				{
+					if (w.Paused)
+						paused++;
+					else
+						stalls++;
+					return;
+				}
+
+				lastTick = w.WorldTick;
+				var om = Game.OrderManager;
+
+				// What the frame has to draw, sampled every fifth tick to keep the recorder's own cost negligible
+				if (wr != null && w.WorldTick % 5 == 0)
+				{
+					lastActors = w.Actors.Count();
+					lastInView = w.ScreenMap.RenderableActorsInBox(wr.Viewport.TopLeft, wr.Viewport.BottomRight).Count();
+				}
+
+				var r = new TickRecord
+				{
+					Tick = w.WorldTick,
+					Start = tickStart,
+					Late = pendingLate,
+					Logic = Now - tickStart,
+					Actors = lastActors,
+					InView = lastInView,
+					Zoom = wr?.Viewport.Zoom ?? 0,
+					Stalls = stalls,
+					Paused = paused,
+					NetFrame = om.NetFrameNumber,
+					Queue = om.OrderQueueLength,
+					Scale = om.TickScale
+				};
+				stalls = 0;
+				paused = 0;
+				Records.Add(r);
+				if (Records.Count > 1)
+					Write(Records[^2], r.Start);
+
+				// The file is complete to the second even if the client never gets to finish it (a crash, a killed process)
+				if (w.WorldTick % 25 == 0)
+					csv?.Flush();
+			}
+
+			public static void AfterRender(double totalMs, double beginMs, double flipMs)
+			{
+				if (world == null || Records.Count == 0)
+					return;
+
+				var r = Records[^1];
+				r.Frames++;
+				r.Render += totalMs;
+				r.Begin += beginMs;
+				r.Flip += flipMs;
+			}
+
+			public static void NoteSkippedFrame()
+			{
+				if (world != null && Records.Count > 0)
+					Records[^1].Skipped++;
+			}
+
+			public static void NoteReset()
+			{
+				if (world != null)
+					resets++;
+			}
+
+			public static void NoteDesync(int frame)
+			{
+				if (world == null)
+					return;
+
+				desyncFrame = frame;
+				Finish($"desync at frame {frame}");
+			}
+
+			static void Start(World w)
+			{
+				world = w;
+				mapTitle = w.Map.Title;
+				timestep = w.Timestep;
+				connection = Game.OrderManager.Connection.GetType().Name.Replace("Connection", "").ToLowerInvariant();
+				players = w.Players.Count(p => p.Playable);
+				lastTick = -1;
+				firstTick = w.WorldTick;
+				stalls = paused = resets = 0;
+				desyncFrame = -1;
+				lastActors = lastInView = 0;
+				Records.Clear();
+				start = Now;
+
+				var safeMap = new string(mapTitle.Where(ch => char.IsLetterOrDigit(ch) || ch == '-' || ch == '_').ToArray());
+				name = $"live-{DateTime.Now:yyyyMMdd-HHmmss}-{safeMap}";
+				csv = new StreamWriter(Path.Combine(outDir, name + ".csv"), false, Encoding.ASCII);
+				csv.WriteLine("tick,t_ms,late_ms,logic_ms,pad_ms,interval_ms,frames,skipped,render_ms,begin_ms,flip_ms,actors,in_view," +
+					"zoom,stalls,paused,netframe,queue,scale");
+				Console.WriteLine($"LiveBench: recording {name} ({connection}, {players} players, {timestep} ms ticks)");
+			}
+
+			static void Write(TickRecord r, double nextStart)
+			{
+				var c = CultureInfo.InvariantCulture;
+				csv?.WriteLine(string.Join(",",
+					r.Tick.ToString(c), (r.Start - start).ToString("F1", c), r.Late.ToString("F1", c), r.Logic.ToString("F2", c),
+					"0", (nextStart - r.Start).ToString("F2", c), r.Frames.ToString(c), r.Skipped.ToString(c),
+					r.Render.ToString("F2", c), r.Begin.ToString("F2", c), r.Flip.ToString("F2", c), r.Actors.ToString(c), r.InView.ToString(c),
+					r.Zoom.ToString("F3", c), r.Stalls.ToString(c), r.Paused.ToString(c), r.NetFrame.ToString(c), r.Queue.ToString(c), r.Scale.ToString("F3", c)));
+			}
+
+			public static void Finish(string reason)
+			{
+				if (world == null)
+					return;
+
+				end = Now;
+				try
+				{
+					if (Records.Count > 0)
+						Write(Records[^1], end);
+					csv?.Dispose();
+					WriteSummary(reason);
+				}
+				catch (Exception e)
+				{
+					Console.WriteLine($"LiveBench: could not write {name}: {e}");
+				}
+
+				csv = null;
+				finishedWorld = world;
+				world = null;
+				Records.Clear();
+			}
+
+			static void WriteSummary(string reason)
+			{
+				var c = CultureInfo.InvariantCulture;
+				var g = Game.Settings.Graphics;
+				var n = Records.Count;
+				var wall = n > 0 ? end - Records[0].Start : 0;
+				var frames = Records.Sum(r => r.Frames);
+				var render = Records.Sum(r => r.Render);
+				var begin = Records.Sum(r => r.Begin);
+				var stallTicks = Records.Sum(r => r.Stalls);
+				var pausedTicks = Records.Sum(r => r.Paused);
+				var logic = Records.Select(r => r.Logic).OrderBy(x => x).ToList();
+				var late = Records.Select(r => r.Late).OrderBy(x => x).ToList();
+				double Mean(Func<TickRecord, double> f) => n > 0 ? Records.Average(f) : 0;
+
+				var summary = new Dictionary<string, object>
+				{
+					["name"] = name,
+					["live"] = true,
+					["reason"] = reason,
+					["map"] = mapTitle,
+					["connection"] = connection,
+					["players"] = players,
+					["machine"] = $"{Environment.OSVersion} {Environment.ProcessorCount} cores {Platform.RuntimeVersion}",
+					["gl"] = SafeGl(),
+					["mode"] = g.Mode.ToString(),
+					["resolution"] = $"{Game.Renderer.Resolution.Width}x{Game.Renderer.Resolution.Height}",
+					["vsync"] = g.VSync,
+					["cap_framerate"] = g.CapFramerate,
+					["max_framerate"] = g.MaxFramerate,
+					["cap_to_tick"] = g.CapFramerateToGameFps,
+					["viewport_distance"] = g.ViewportDistance.ToString(),
+					["timestep_ms"] = timestep,
+					["first_tick"] = firstTick,
+					["ticks"] = n,
+					["wall_s"] = wall / 1000,
+					["realised_speed_pct"] = wall > 0 ? 100.0 * n * timestep / wall : 0,
+					["stall_ticks"] = stallTicks,
+					["stall_pct"] = n + stallTicks > 0 ? 100.0 * stallTicks / (n + stallTicks) : 0,
+					["paused_ticks"] = pausedTicks,
+					["logic_mean_ms"] = Mean(r => r.Logic),
+					["logic_p50_ms"] = Percentile(logic, 0.5),
+					["logic_p95_ms"] = Percentile(logic, 0.95),
+					["logic_max_ms"] = logic.Count > 0 ? logic[^1] : 0,
+					["render_mean_ms"] = Mean(r => r.Render),
+					["render_per_frame_ms"] = frames > 0 ? (render - begin) / frames : 0,
+					["begin_mean_ms"] = Mean(r => r.Begin),
+					["flip_mean_ms"] = Mean(r => r.Flip),
+					["frames"] = frames,
+					["fps"] = wall > 0 ? 1000.0 * frames / wall : 0,
+					["late_ticks_pct"] = n > 0 ? 100.0 * Records.Count(r => r.Late >= 5) / n : 0,
+					["late_mean_ms"] = Mean(r => r.Late),
+					["late_p95_ms"] = Percentile(late, 0.95),
+					["logic_resets"] = resets,
+					["queue_mean"] = Mean(r => r.Queue),
+					["queue_max"] = n > 0 ? Records.Max(r => r.Queue) : 0,
+					["scale_mean"] = Mean(r => r.Scale),
+					["slowed_pct"] = n > 0 ? 100.0 * Records.Count(r => r.Scale > 1.005f) / n : 0,
+					["catching_up_pct"] = n > 0 ? 100.0 * Records.Count(r => r.Scale < 0.995f) / n : 0,
+					["zoom_mean"] = Mean(r => r.Zoom),
+					["in_view_mean"] = Mean(r => r.InView),
+					["actors_mean"] = Mean(r => r.Actors),
+					["desync_frame"] = desyncFrame,
+				};
+
+				var json = new StringBuilder("{\n");
+				foreach (var kv in summary)
+				{
+					var v = kv.Value switch
+					{
+						null => "null",
+						bool b => b ? "true" : "false",
+						string str => "\"" + str.Replace("\\", "\\\\").Replace("\"", "\\\"") + "\"",
+						double d => d.ToString("F3", c),
+						float f => f.ToString("F3", c),
+						_ => Convert.ToString(kv.Value, c)
+					};
+					json.Append($"  \"{kv.Key}\": {v},\n");
+				}
+
+				json.Length -= 2;
+				json.Append("\n}\n");
+				File.WriteAllText(Path.Combine(outDir, name + ".json"), json.ToString());
+
+				var line = string.Format(c,
+					"{0,-40} {1,2}ms {2,-16} {3,-5} {4,4} {5,2}p | {6,6:F1} min speed {7,5:F1}% stalls {8,4:F1}% paused {9,4} | logic {10,5:F1} p95 {11,5:F1} max {12,5:F0} " +
+					"| frame {13,4:F1} begin {14,4:F1} flip {15,4:F1} fps {16,4:F0} late {17,3:F0}% resets {18} | slowed {19,4:F1}% catchup {20,4:F1}% queue {21,4:F1} | zoom {22,4:F2} view {23,4:F0}/{24,4:F0} | {25}",
+					name, timestep, g.Mode, g.VSync ? "vsync" : "-", g.CapFramerateToGameFps ? "tick" : g.CapFramerate ? g.MaxFramerate.ToString(c) : "-", players,
+					wall / 60000, summary["realised_speed_pct"], summary["stall_pct"], pausedTicks, summary["logic_p50_ms"], summary["logic_p95_ms"], summary["logic_max_ms"],
+					summary["render_per_frame_ms"], summary["begin_mean_ms"], summary["flip_mean_ms"], summary["fps"], summary["late_ticks_pct"], resets,
+					summary["slowed_pct"], summary["catching_up_pct"], summary["queue_mean"], summary["zoom_mean"], summary["in_view_mean"], summary["actors_mean"], reason);
+				File.AppendAllText(Path.Combine(outDir, "summary.txt"), line + "\n");
+				Console.WriteLine(line);
+			}
 		}
 
 		static string SafeGl()

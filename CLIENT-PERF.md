@@ -53,6 +53,23 @@ Frame skipping, on a synthetic 4,000-unit map at 1080p where a tick plus a frame
 against a 40 ms budget: stock ran the game at 15 ticks per second, this branch at 20, bound by
 the 15 FPS floor (a floor of 10 reaches the full 25).
 
+## Measuring real games: the live bench
+
+The branch also carries the client bench (`OpenRA.Game/Support/LiveBench.cs`). It does nothing
+unless asked for on the command line. Started with
+
+    OpenRA.exe Game.Mod=ra Bench.Out=C:\bench Bench.Live=true
+
+(for example from a shortcut or a `play.bat`), the game plays exactly as normal and writes, for
+every multiplayer or skirmish game of the session, `live-<time>-<map>.csv` with one row per tick
+— logic ms, how late the tick started, frames drawn and frames skipped, render ms, actors alive
+and in view, the server's tick scale, stalls — plus a `.json` summary and a line in
+`summary.txt`. Those files are how to see what this build does on a given computer in a given
+game, and what a slow computer is actually short of. `Bench.NoFrameSkip=true` records a game
+with a frame after every tick, as stock draws, for comparison. The other `Bench.*` options
+(see the file's header) replay a recorded game as if it were live, with a padded or ballasted
+tick, a repeated world draw, a fixed camera or a whole-map zoom, for controlled experiments.
+
 ## Building and installing
 
 Build as usual for OpenRA (`make` on Linux and macOS, `make.cmd all` on Windows; see

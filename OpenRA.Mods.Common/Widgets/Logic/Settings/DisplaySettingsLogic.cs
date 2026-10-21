@@ -148,6 +148,7 @@ namespace OpenRA.Mods.Common.Widgets.Logic
 			SettingsUtils.BindCheckboxPref(panel, "FRAME_LIMIT_CHECKBOX", ds, "CapFramerate");
 			SettingsUtils.BindCheckboxPref(panel, "FRAME_LIMIT_GAMESPEED_CHECKBOX", ds, "CapFramerateToGameFps");
 			SettingsUtils.BindIntSliderPref(panel, "FRAME_LIMIT_SLIDER", ds, "MaxFramerate");
+			SettingsUtils.BindIntSliderPref(panel, "MIN_FRAMERATE_SLIDER", ds, "MinFramerate");
 			SettingsUtils.BindCheckboxPref(panel, "PLAYER_STANCE_COLORS_CHECKBOX", gs, "UsePlayerStanceColors");
 
 			var cb = panel.Get<CheckboxWidget>("PLAYER_STANCE_COLORS_CHECKBOX");
@@ -248,6 +249,12 @@ namespace OpenRA.Mods.Common.Widgets.Logic
 
 			panel.Get<SliderWidget>("FRAME_LIMIT_SLIDER").IsDisabled = () => !frameLimitCheckbox.IsChecked() || frameLimitGamespeedCheckbox.IsChecked();
 
+			// Frames skipped while the simulation is behind, down to this rate (not translated: a client-side experiment)
+			var minFramerateLabel = panel.Get<LabelWidget>("MIN_FRAMERATE_LABEL");
+			minFramerateLabel.GetText = () => ds.MinFramerate >= 25
+				? "Catching up: never skip frames"
+				: $"Catching up: skip frames down to {ds.MinFramerate} FPS";
+
 			// Player profile
 			var ps = Game.Settings.Player;
 
@@ -323,6 +330,7 @@ namespace OpenRA.Mods.Common.Widgets.Logic
 				ds.CapFramerate = dds.CapFramerate;
 				ds.MaxFramerate = dds.MaxFramerate;
 				ds.CapFramerateToGameFps = dds.CapFramerateToGameFps;
+				ds.MinFramerate = dds.MinFramerate;
 				ds.GLProfile = dds.GLProfile;
 				ds.Mode = dds.Mode;
 				ds.VideoDisplay = dds.VideoDisplay;

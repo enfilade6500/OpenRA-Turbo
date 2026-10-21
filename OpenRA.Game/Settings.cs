@@ -172,6 +172,9 @@ namespace OpenRA
 		[Desc("Amount of time required for triggering perf.log output.")]
 		public float LongTickThresholdMs = 1;
 
+		[Desc("Draw at most this many frames per second whatever the load, to try out what a low frame rate is like. 0: off.")]
+		public int ForceFramerate = 0;
+
 		[Desc("Throw an exception if the world sync hash changes while evaluating user input.")]
 		public bool SyncCheckUnsyncedCode = false;
 
@@ -205,6 +208,10 @@ namespace OpenRA
 
 		[Desc("Set a frame rate limit of 1 render frame per game simulation frame (overrides CapFramerate/MaxFramerate).")]
 		public bool CapFramerateToGameFps = false;
+
+		[Desc("When the simulation runs slower than the game's tick rate, frames are skipped so that it can catch up, " +
+			"but never below this many per second. At the tick rate (25 at normal speed) or above, no frame is skipped.")]
+		public int MinFramerate = 15;
 
 		[Desc("Disable the OpenGL debug message callback feature.")]
 		public bool DisableGLDebugMessageCallback = false;

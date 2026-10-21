@@ -781,11 +781,6 @@ namespace OpenRA
 			// value.
 			const int MaxLogicTicksBehind = 250;
 
-			// Try to maintain at least this many FPS during replays, even if it slows down logic.
-			// However, if the user has enabled a framerate limit that is even lower
-			// than this, then that limit will be used.
-			const int MinReplayFps = 10;
-
 			// Timestamps for when the next logic and rendering should run
 			var nextLogic = RunTime;
 			var nextRender = RunTime;
@@ -809,6 +804,19 @@ namespace OpenRA
 					renderInterval = 1000 / maxFramerate;
 				}
 
+				// Try to maintain at least this many FPS while the simulation is behind (and during replays), even if
+				// it slows the simulation down. However, if the user has enabled a framerate limit that is even lower
+				// than this, then that limit will be used.
+				var minFramerate = Settings.Graphics.MinFramerate.Clamp(1, 1000);
+
+				// A developer trying out what a low frame rate feels like: draw at most this often, whatever the load
+				var forceFramerate = Settings.Debug.ForceFramerate;
+				if (forceFramerate > 0)
+				{
+					renderInterval = Math.Max(renderInterval, 1000 / forceFramerate);
+					minFramerate = Math.Min(minFramerate, forceFramerate);
+				}
+
 				// Tick as fast as possible while restoring game saves, capping rendering at 5 FPS
 				if (OrderManager.World != null && OrderManager.World.IsLoadingGameSave)
 				{
@@ -826,31 +834,37 @@ namespace OpenRA
 				var nextUpdate = Math.Min(nextLogic, nextRender);
 				if (now >= nextUpdate)
 				{
-					var forceRender = renderBeforeNextTick || now >= forcedNextRender;
-
 					if (now >= nextLogic && !renderBeforeNextTick)
 					{
 						nextLogic += logicInterval;
 
 						LogicTick();
 
-						// Force at least one render per tick during regular gameplay
+						// The decisions below are about the time left after the tick, not before it
+						now = RunTime;
+
+						// Force at least one render per tick during regular gameplay, unless the simulation is behind:
+						// when the next tick is already due by the time this one is done, drawing now would only put the
+						// simulation further behind, so frames are skipped until it has caught up, but never for longer
+						// than the minimum frame rate allows (forcedNextRender below). A forced developer frame rate is
+						// never exceeded either.
 						if (OrderManager.World != null && !OrderManager.World.IsLoadingGameSave && !OrderManager.World.IsReplay)
-							renderBeforeNextTick = true;
+							renderBeforeNextTick = forceFramerate == 0 && now < nextLogic;
 					}
 
+					var forceRender = renderBeforeNextTick || now >= forcedNextRender;
 					var haveSomeTimeUntilNextLogic = now < nextLogic;
 					var isTimeToRender = now >= nextRender;
 					if (!Renderer.WindowIsSuspended && ((isTimeToRender && haveSomeTimeUntilNextLogic) || forceRender))
 					{
 						nextRender = now + renderInterval;
 
-						// Pick the minimum allowed FPS (the lower between 'minReplayFPS'
-						// and the user's max frame rate) and convert it to maximum time
+						// Pick the minimum allowed FPS (the lower between the minimum frame
+						// rate and the user's max frame rate) and convert it to maximum time
 						// allowed between screen updates.
 						// We do this before rendering to include the time rendering takes
 						// in this interval.
-						var maxRenderInterval = Math.Max(1000 / MinReplayFps, renderInterval);
+						var maxRenderInterval = Math.Max(1000 / minFramerate, renderInterval);
 						forcedNextRender = now + maxRenderInterval;
 
 						RenderTick();

@@ -73,7 +73,10 @@ tick, a repeated world draw, a fixed camera or a whole-map zoom, for controlled 
 ## Building and installing
 
 Build as usual for OpenRA (`make` on Linux and macOS, `make.cmd all` on Windows; see
-INSTALL.md). Then copy, from the build output into an installed release-20250330:
+INSTALL.md). The tree is stamped `release-20250330` (the `VERSION` file and the mods'
+`Version:` lines, as the release packaging does), so the build identifies itself as the release
+and plays on release servers with release clients; a `{DEV_VERSION}` build would be turned away.
+Then copy, from the build output into an installed release-20250330:
 
     OpenRA.Game.dll
     OpenRA.Mods.Common.dll

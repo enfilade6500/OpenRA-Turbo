@@ -73,8 +73,15 @@ namespace OpenRA.Mods.Common.Traits.Render
 
 		void ITick.Tick(Actor self)
 		{
-			if (IsTraitDisabled)
-				return;
+			// PERF: The value is computed when the bar is drawn (GetValue), not every tick for every production
+			// building: it is read only for actors whose selection bars are on screen.
+		}
+
+		float ISelectionBar.GetValue()
+		{
+			// Only people we like should see our production status.
+			if (IsTraitDisabled || !self.Owner.IsAlliedWith(self.World.RenderPlayer))
+				return 0;
 
 			var current = queue.AllQueued().Where(i => i.Started).MinByOrDefault(i => i.RemainingTime);
 			if (current == null)
@@ -83,13 +90,6 @@ namespace OpenRA.Mods.Common.Traits.Render
 				value = 1;
 			else
 				value = 1 - (float)current.RemainingCost / current.TotalCost;
-		}
-
-		float ISelectionBar.GetValue()
-		{
-			// Only people we like should see our production status.
-			if (IsTraitDisabled || !self.Owner.IsAlliedWith(self.World.RenderPlayer))
-				return 0;
 
 			return value;
 		}

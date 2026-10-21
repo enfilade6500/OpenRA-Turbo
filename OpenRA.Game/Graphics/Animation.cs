@@ -33,6 +33,15 @@ namespace OpenRA.Graphics
 		int timeUntilNextFrame;
 		Action tickFunc;
 
+		/// <summary>
+		/// The animation is a plain loop (PlayRepeating): its frame follows the tick count and nothing is called
+		/// back, so ticking it while it is not drawn changes nothing anyone can observe.
+		/// </summary>
+		public bool IsLoop { get; private set; }
+
+		/// <summary>A loop of a single frame: a still image that no tick ever changes.</summary>
+		public bool IsStill => IsLoop && CurrentSequence != null && CurrentSequence.Length <= 1;
+
 		public Animation(World world, string name)
 			: this(world, name, () => WAngle.Zero) { }
 
@@ -136,6 +145,7 @@ namespace OpenRA.Graphics
 		{
 			backwards = false;
 			tickAlways = false;
+			IsLoop = true;
 			PlaySequence(sequenceName);
 
 			frame = 0;
@@ -162,6 +172,7 @@ namespace OpenRA.Graphics
 		{
 			backwards = false;
 			tickAlways = false;
+			IsLoop = false;
 			PlaySequence(sequenceName);
 
 			frame = 0;
@@ -187,6 +198,7 @@ namespace OpenRA.Graphics
 		{
 			backwards = false;
 			tickAlways = true;
+			IsLoop = false;
 			PlaySequence(sequenceName);
 
 			frame = func();
@@ -196,6 +208,7 @@ namespace OpenRA.Graphics
 		public void PlayFetchDirection(string sequenceName, Func<int> direction)
 		{
 			tickAlways = false;
+			IsLoop = false;
 			PlaySequence(sequenceName);
 
 			frame = 0;
@@ -222,6 +235,10 @@ namespace OpenRA.Graphics
 				tickFunc?.Invoke();
 			else
 			{
+				// PERF: A still image (most units standing, every tree and wall) has nothing to advance
+				if (IsStill)
+					return;
+
 				timeUntilNextFrame -= t;
 				while (timeUntilNextFrame <= 0)
 				{

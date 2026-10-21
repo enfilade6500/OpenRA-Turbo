@@ -122,11 +122,15 @@ namespace OpenRA.Mods.Common.Traits.Render
 
 			public bool Tick()
 			{
-				// Tick the animation
-				Animation.Animation.Tick();
+				var visible = IsVisible;
+
+				// Tick the animation. PERF: not a plain loop that is hidden: its frame is not drawn, it calls nothing
+				// back, and when it is shown again any frame of the loop is as good as another. (The engine itself
+				// skips still images.)
+				if (visible || !Animation.Animation.IsLoop)
+					Animation.Animation.Tick();
 
 				// Return to the caller whether the renderable position or size has changed
-				var visible = IsVisible;
 				var offset = Animation.OffsetFunc?.Invoke() ?? WVec.Zero;
 				var sequence = Animation.Animation.CurrentSequence;
 

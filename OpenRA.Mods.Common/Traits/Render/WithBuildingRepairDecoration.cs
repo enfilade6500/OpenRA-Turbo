@@ -37,6 +37,10 @@ namespace OpenRA.Mods.Common.Traits.Render
 			CycleRepairer();
 		}
 
+		// The animation cycles through the repairers by a callback at the end of each run, so it must keep ticking
+		// (its own pause function already stops it while no repair is active)
+		protected override bool AnimationIsStill => false;
+
 		protected override bool ShouldRender(Actor self)
 		{
 			if (rb.Repairers.Count == 0)

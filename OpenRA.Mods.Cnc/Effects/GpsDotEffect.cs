@@ -91,11 +91,14 @@ namespace OpenRA.Mods.Cnc.Effects
 
 		void IEffect.Tick(World world)
 		{
-			for (var playerIndex = 0; playerIndex < dotStates.Count; playerIndex++)
-			{
-				var state = dotStates[playerIndex];
-				state.Visible = ShouldRender(state, world.Players[playerIndex]);
-			}
+			// PERF: Only the player whose view is drawn reads the answer (RenderAnnotation), so only theirs is
+			// computed: one shroud lookup per dot per tick instead of one per player, for every actor in the game.
+			var renderPlayer = world.RenderPlayer;
+			if (renderPlayer == null)
+				return;
+
+			var state = dotStates[renderPlayer];
+			state.Visible = ShouldRender(state, renderPlayer);
 		}
 
 		IEnumerable<IRenderable> IEffect.Render(WorldRenderer wr)

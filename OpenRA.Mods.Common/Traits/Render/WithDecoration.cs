@@ -66,6 +66,18 @@ namespace OpenRA.Mods.Common.Traits.Render
 			};
 		}
 
-		void ITick.Tick(Actor self) { anim.Tick(); }
+		/// <summary>The animation is a single still image playing on repeat, so a tick would change nothing.</summary>
+		protected virtual bool AnimationIsStill => anim.CurrentSequence.Length <= 1;
+
+		void ITick.Tick(Actor self)
+		{
+			// PERF: A decoration that is not shown (its condition is off: every rank chevron on every unit that has
+			// not earned it) or that is a still image has no animation to advance; ticking it is pure overhead,
+			// four times per unit per tick in RA.
+			if (IsTraitDisabled || AnimationIsStill)
+				return;
+
+			anim.Tick();
+		}
 	}
 }

@@ -351,12 +351,25 @@ namespace OpenRA.Mods.Common.Traits
 			var chosenTargetPriority = int.MinValue;
 			var chosenTargetRange = 0;
 
+			// PERF: A unit that can only attack enemies would, below, skip every actor in range that does not appear
+			// hostile. The actor map knows per bin whether anyone who could appear hostile is there at all; when not
+			// (the usual case for a massed army with nothing in range), the walk over every neighbour is skipped.
+			// The result is the same: the walk would have yielded nothing. Without a frozen-actor pass to make
+			// either, the scan is over before its priority list is even built.
+			var origin = self.CenterPosition;
+			var scanBox = new WVec(scanRange, scanRange, WDist.Zero);
+			var mayHaveHostile = attackStances != PlayerRelationship.Enemy || self.World.ActorMap is not ActorMap actorMap
+				|| actorMap.MayContainActorAppearingHostileTo(self.Owner, origin - scanBox, origin + scanBox);
+			if (!mayHaveHostile && !allowMove && !ab.Info.TargetFrozenActors)
+				return chosenTarget;
+
 			var activePriorities = activeTargetPriorities.ToList();
 			if (activePriorities.Count == 0)
 				return chosenTarget;
 
-			var targetsInRange = self.World.FindActorsInCircle(self.CenterPosition, scanRange)
-				.Select(Target.FromActor);
+			var targetsInRange = mayHaveHostile
+				? self.World.FindActorsInCircle(origin, scanRange).Select(Target.FromActor)
+				: Enumerable.Empty<Target>();
 
 			if (allowMove || ab.Info.TargetFrozenActors)
 				targetsInRange = targetsInRange

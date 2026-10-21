@@ -40,6 +40,60 @@ namespace OpenRA.Mods.Common.Traits
 		{
 			public readonly List<Actor> Actors = new();
 			public readonly List<ProximityTrigger> ProximityTriggers = new();
+
+			// Who owns the actors in this bin, kept in step with Actors entry by entry (OwnerIndices[i] is the owner
+			// index Actors[i] was added under, which may differ from its current owner until its position is updated):
+			// how many entries each owner has, and the same as a bit per owner, for MayContainActorAppearingHostileTo.
+			public readonly List<int> OwnerIndices = new();
+			public readonly int[] OwnerCounts = new int[MaxOwners];
+			public readonly int[] DisguisableCounts = new int[MaxOwners];
+			public ulong OwnerMask;
+			public ulong DisguisableMask;
+
+			public void Add(Actor a, int ownerIndex)
+			{
+				Actors.Add(a);
+				OwnerIndices.Add(ownerIndex);
+				if (OwnerCounts[ownerIndex]++ == 0)
+					OwnerMask |= 1UL << ownerIndex;
+
+				if (a.EffectiveOwner != null && DisguisableCounts[ownerIndex]++ == 0)
+					DisguisableMask |= 1UL << ownerIndex;
+			}
+
+			/// <summary>Removes the entries matching the predicate, in place and in order, like List.RemoveAll; returns how many.</summary>
+			public int RemoveAll(Predicate<Actor> shouldBeRemoved)
+			{
+				var kept = 0;
+				for (var i = 0; i < Actors.Count; i++)
+				{
+					var a = Actors[i];
+					var ownerIndex = OwnerIndices[i];
+					if (shouldBeRemoved(a))
+					{
+						if (--OwnerCounts[ownerIndex] == 0)
+							OwnerMask &= ~(1UL << ownerIndex);
+
+						if (a.EffectiveOwner != null && --DisguisableCounts[ownerIndex] == 0)
+							DisguisableMask &= ~(1UL << ownerIndex);
+
+						continue;
+					}
+
+					Actors[kept] = a;
+					OwnerIndices[kept] = ownerIndex;
+					kept++;
+				}
+
+				var removed = Actors.Count - kept;
+				if (removed > 0)
+				{
+					Actors.RemoveRange(kept, removed);
+					OwnerIndices.RemoveRange(kept, removed);
+				}
+
+				return removed;
+			}
 		}
 
 		sealed class CellTrigger
@@ -184,6 +238,11 @@ namespace OpenRA.Mods.Common.Traits
 		readonly HashSet<Actor> addActorPosition = new();
 		readonly HashSet<Actor> removeActorPosition = new();
 		readonly Predicate<Actor> actorShouldBeRemoved;
+
+		// Owners are given small indices as they are first seen, for the bit masks kept per bin
+		const int MaxOwners = 64;
+		readonly Dictionary<Player, int> ownerIndices = new();
+		bool tooManyOwners;
 
 		public WDist LargestActorRadius { get; }
 		public WDist LargestBlockingActorRadius { get; }
@@ -478,7 +537,7 @@ namespace OpenRA.Mods.Common.Traits
 			{
 				foreach (var bin in bins)
 				{
-					var removed = bin.Actors.RemoveAll(actorShouldBeRemoved);
+					var removed = bin.RemoveAll(actorShouldBeRemoved);
 					if (removed > 0)
 						foreach (var t in bin.ProximityTriggers)
 							t.Dirty = true;
@@ -494,7 +553,7 @@ namespace OpenRA.Mods.Common.Traits
 				var row = WorldCoordToBinIndex(pos.Y).Clamp(0, rows - 1);
 				var bin = BinAt(row, col);
 
-				bin.Actors.Add(a);
+				bin.Add(a, OwnerIndex(a.Owner));
 				foreach (var t in bin.ProximityTriggers)
 					t.Dirty = true;
 			}
@@ -639,6 +698,63 @@ namespace OpenRA.Mods.Common.Traits
 			for (var row = minRow; row <= maxRow; row++)
 				for (var col = minCol; col <= maxCol; col++)
 					yield return BinAt(row, col);
+		}
+
+		int OwnerIndex(Player owner)
+		{
+			if (ownerIndices.TryGetValue(owner, out var index))
+				return index;
+
+			index = ownerIndices.Count;
+			if (index >= MaxOwners)
+			{
+				// Cannot happen in practice; if it does, the precheck below just stops skipping scans
+				tooManyOwners = true;
+				return MaxOwners - 1;
+			}
+
+			ownerIndices.Add(owner, index);
+			return index;
+		}
+
+		/// <summary>
+		/// False when no actor in the bins covering the box can appear hostile to the player (ActorExts.AppearsHostileTo):
+		/// none there is owned by an enemy, and none that can disguise itself is owned by anyone but an ally. The bins are
+		/// a superset of what ActorsInBox would yield, and the ownership is the one the actors were added under, so the
+		/// answer is conservative: whenever it is false, a scan of the box for hostile actors would find nothing.
+		/// A few bins and a mask each; the scan it saves walks every actor in them.
+		/// </summary>
+		public bool MayContainActorAppearingHostileTo(Player player, WPos a, WPos b)
+		{
+			if (tooManyOwners)
+				return true;
+
+			ulong enemies = 0, notAllies = 0;
+			foreach (var kv in ownerIndices)
+			{
+				var relationship = player.RelationshipWith(kv.Key);
+				if (relationship == PlayerRelationship.Enemy)
+					enemies |= 1UL << kv.Value;
+
+				if (relationship != PlayerRelationship.Ally)
+					notAllies |= 1UL << kv.Value;
+			}
+
+			if (enemies == 0 && notAllies == 0)
+				return false;
+
+			var region = BinRectangleCoveringWorldArea(Math.Min(a.X, b.X), Math.Min(a.Y, b.Y), Math.Max(a.X, b.X), Math.Max(a.Y, b.Y));
+			for (var row = region.Top; row <= region.Bottom; row++)
+			{
+				for (var col = region.Left; col <= region.Right; col++)
+				{
+					var bin = BinAt(row, col);
+					if ((bin.OwnerMask & enemies) != 0 || (bin.DisguisableMask & notAllies) != 0)
+						return true;
+				}
+			}
+
+			return false;
 		}
 
 		public IEnumerable<Actor> ActorsInBox(WPos a, WPos b)

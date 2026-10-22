@@ -23,6 +23,20 @@ namespace OpenRA.Mods.Common.Orders
 		readonly string worldSelectCursor = ChromeMetrics.Get<string>("WorldSelectCursor");
 		readonly string worldDefaultCursor = ChromeMetrics.Get<string>("WorldDefaultCursor");
 
+		// The order list OrderForUnit works in, kept between calls (see there)
+		static List<(IIssueOrder Trait, IOrderTargeter Order)> orderBuffer;
+
+		// What the last cursor was worked out for, and what it was (see GetCursor)
+		int cursorTick = -1, cursorSelectionHash;
+		CPos cursorCell;
+		TargetType cursorTargetType;
+		Actor cursorTargetActor;
+		FrozenActor cursorTargetFrozen;
+		WPos cursorTargetPos;
+		Modifiers cursorModifiers;
+		MouseButton cursorButton;
+		string cursor;
+
 		protected static Target TargetForInput(World world, CPos cell, int2 worldPixel, MouseInput mi)
 		{
 			var actor = world.ScreenMap.ActorsAtMouse(mi)
@@ -76,16 +90,37 @@ namespace OpenRA.Mods.Common.Orders
 				useSelect = target.Type == TargetType.Actor && target.Actor.Info.HasTraitInfo<ISelectableInfo>();
 			else
 			{
+				// PERF: The cursor is chosen from the orders of every selected unit, on every frame. Between frames of
+				// the same world tick nothing that goes into it changes unless the mouse reached another cell or target,
+				// a modifier or the selection changed, so the last answer is reused then (a computer that draws several
+				// frames per tick is spared all but the first).
+				var targetPos = target.Type == TargetType.Terrain ? target.CenterPosition : WPos.Zero;
+				if (world.WorldTick == cursorTick && cell == cursorCell && mi.Modifiers == cursorModifiers && mi.Button == cursorButton
+					&& world.Selection.Hash == cursorSelectionHash && target.Type == cursorTargetType && target.Actor == cursorTargetActor
+					&& target.FrozenActor == cursorTargetFrozen && targetPos == cursorTargetPos)
+					return cursor;
+
+				cursorTick = world.WorldTick;
+				cursorCell = cell;
+				cursorModifiers = mi.Modifiers;
+				cursorButton = mi.Button;
+				cursorSelectionHash = world.Selection.Hash;
+				cursorTargetType = target.Type;
+				cursorTargetActor = target.Actor;
+				cursorTargetFrozen = target.FrozenActor;
+				cursorTargetPos = targetPos;
+
 				var ordersWithCursor = world.Selection.Actors
 					.Select(a => OrderForUnit(a, target, cell, mi))
 					.Where(o => o != null && o.Cursor != null);
 
 				var cursorOrder = ordersWithCursor.MaxByOrDefault(o => o.Order.OrderPriority);
 				if (cursorOrder != null)
-					return cursorOrder.Cursor;
+					return cursor = cursorOrder.Cursor;
 
 				useSelect = target.Type == TargetType.Actor && target.Actor.Info.HasTraitInfo<ISelectableInfo>() &&
 					(mi.Modifiers.HasModifier(Modifiers.Shift) || world.Selection.Actors.Count == 0);
+				return cursor = useSelect ? worldSelectCursor : worldDefaultCursor;
 			}
 
 			return useSelect ? worldSelectCursor : worldDefaultCursor;
@@ -159,33 +194,51 @@ namespace OpenRA.Mods.Common.Orders
 			if (mi.Modifiers.HasModifier(Modifiers.Alt))
 				modifiers |= TargetModifiers.ForceMove;
 
-			// The Select(x => x) is required to work around an issue on mono 5.0
-			// where calling OrderBy* on SelectManySingleSelectorIterator can in some
-			// circumstances (which we were unable to identify) replace entries in the
-			// enumeration with duplicates of other entries.
-			// Other action that replace the SelectManySingleSelectorIterator with a
-			// different enumerator type (e.g. .Where(true) or .ToList()) also work.
-			var orders = self.TraitsImplementing<IIssueOrder>()
-				.SelectMany(trait => trait.Orders.Select(x => new { Trait = trait, Order = x }))
-				.Select(x => x)
-				.OrderByDescending(x => x.Order.OrderPriority)
-				.ToList();
-
-			for (var i = 0; i < 2; i++)
+			// PERF: This runs for every selected actor on every frame, to choose the mouse cursor. The orders are
+			// collected into a reused list and sorted in place (a stable insertion sort, as the lists are short), where
+			// LINQ allocated an object per order, an iterator per trait and the sort's buffers each time.
+			var orders = orderBuffer ?? new List<(IIssueOrder Trait, IOrderTargeter Order)>();
+			orderBuffer = null;
+			try
 			{
-				foreach (var o in orders)
+				foreach (var trait in self.TraitsImplementing<IIssueOrder>())
+					foreach (var order in trait.Orders)
+						orders.Add((trait, order));
+
+				for (var i = 1; i < orders.Count; i++)
 				{
-					var localModifiers = modifiers;
-					string cursor = null;
-					if (o.Order.CanTarget(self, target, ref localModifiers, ref cursor))
-						return new UnitOrderResult(self, o.Order, o.Trait, cursor, target);
+					var item = orders[i];
+					var j = i - 1;
+					while (j >= 0 && orders[j].Order.OrderPriority < item.Order.OrderPriority)
+					{
+						orders[j + 1] = orders[j];
+						j--;
+					}
+
+					orders[j + 1] = item;
 				}
 
-				// No valid orders, so check for orders against the cell
-				target = Target.FromCell(self.World, xy);
-			}
+				for (var i = 0; i < 2; i++)
+				{
+					foreach (var o in orders)
+					{
+						var localModifiers = modifiers;
+						string cursor = null;
+						if (o.Order.CanTarget(self, target, ref localModifiers, ref cursor))
+							return new UnitOrderResult(self, o.Order, o.Trait, cursor, target);
+					}
 
-			return null;
+					// No valid orders, so check for orders against the cell
+					target = Target.FromCell(self.World, xy);
+				}
+
+				return null;
+			}
+			finally
+			{
+				orders.Clear();
+				orderBuffer = orders;
+			}
 		}
 
 		static Order CheckSameOrder(IOrderTargeter iot, Order order)

@@ -40,6 +40,16 @@ ammunition, capture progress) that the setting also shows; a unit with no such b
 drew nothing, which on a screen of 4,000 undamaged infantry was 5 ms a frame on a real machine for
 no pixels. An actor with no extra bars now gets the renderable only when its health is to be shown.
 
+**The mouse cursor over a large selection costs less.** The cursor is chosen on every frame from the
+orders of every selected unit (whichever offers the highest-priority order for what is under the
+mouse wins), which with 4,000 selected was as much work as drawing their decorations. Each unit's
+order list was built with LINQ and sorted afresh — an object per order, an iterator per trait and
+the sort's buffers, every unit, every frame; it is now collected into a reused list and sorted in
+place, with the same order. Measured headless, 1,000 infantry selected and the mouse over them:
+3.6 ms a frame down to 2.3. And between frames of the same world tick the answer cannot change
+unless the mouse reached another cell or target, a modifier changed or the selection did, so it is
+reused then; a computer that draws several frames per tick is spared all but the first.
+
 **A held drag box is no longer heavier than "always show".** While a selection box is held open,
 every unit inside shows its bars. The set of units in the box was kept as a list and searched once
 per actor on the screen per frame, a box of 500 over a screen of 1,000 being half a million
@@ -100,10 +110,14 @@ game, and what a slow computer is actually short of. `Bench.NoFrameSkip=true` re
 with a frame after every tick, as stock draws, for comparison. On a test map, `Bench.Select=all`
 keeps every unit selected and the camera on them (`=camera` for the camera alone, `=drag` for a
 held drag box over them). Every row also carries `selected` (units selected that tick) and the
-frame's selection drawing split from the rest: `annot_gen_ms` (producing the boxes, bars and other
-annotations), `annot_draw_ms` (turning them into vertices) and `flush_ms` (handing the batches to
-the GL driver), from the perf items `render_annot_gen`, `render_annot_draw` and `render_flush`,
-which the in-game performance graph shows too. The other `Bench.*` options
+frame's selection work split from the rest: `annot_gen_ms` (producing the boxes, bars and other
+annotations), `annot_draw_ms` (turning them into vertices), `flush_ms` (handing the batches to
+the GL driver) and `cursor_ms` (choosing the mouse cursor from the selection's orders), from the
+perf items `render_annot_gen`, `render_annot_draw`, `render_flush` and `render_cursor`, which the
+in-game performance graph shows too. In the `Bench.Select` modes the mouse is put over the middle
+of the screen, so the cursor is worked out over the units as it would be in play. A real machine,
+4,000 infantry selected at 1755x987: 46 ms a frame, of which 12.6 producing the annotations and
+6.7 drawing them; the rest is the world pass (20 ms with nothing selected) and the cursor. The other `Bench.*` options
 (see the file's header) replay a recorded game as if it were live, with a padded or ballasted
 tick, a repeated world draw, a fixed camera or a whole-map zoom, for controlled experiments.
 

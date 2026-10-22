@@ -26,6 +26,7 @@ namespace OpenRA.Mods.Common.Traits.Render
 	{
 		IDecoration[] decorations;
 		IDecoration[] selectedDecorations;
+		bool hasExtraBars;
 
 		protected readonly SelectionDecorationsBaseInfo Info;
 
@@ -40,6 +41,7 @@ namespace OpenRA.Mods.Common.Traits.Render
 		{
 			selectedDecorations = self.TraitsImplementing<IDecoration>().ToArray();
 			decorations = selectedDecorations.Where(d => !d.RequiresSelection).ToArray();
+			hasExtraBars = self.TraitsImplementing<ISelectionBar>().Any();
 		}
 
 		static IEnumerable<WPos> ActivityTargetPath(Actor self)
@@ -95,7 +97,9 @@ namespace OpenRA.Mods.Common.Traits.Render
 				foreach (var r in RenderSelectionBox(self, wr, Info.SelectionBoxColor))
 					yield return r;
 
-			if (displayHealth || displayExtra)
+			// PERF: Extra bars alone draw nothing for an actor that has none, so skip the renderable rather than make one
+			// that draws nothing. With "show when damaged" that is every undamaged unit on the screen on every frame.
+			if (displayHealth || (displayExtra && hasExtraBars))
 				foreach (var r in RenderSelectionBars(self, wr, displayHealth, displayExtra))
 					yield return r;
 

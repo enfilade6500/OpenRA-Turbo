@@ -34,6 +34,12 @@ a 20 ms baseline, so most of what a selection costs there is still there. The li
 annotation columns (below) say where it goes on a given machine; the per-unit bookkeeping (trait
 lookups, the renderable objects) is the next thing to look at if it still matters.
 
+**"Show when damaged" no longer costs a bars pass over every undamaged unit.** With that setting,
+stock gave every unit on the screen a bars renderable on every frame, for the extra bars (cargo,
+ammunition, capture progress) that the setting also shows; a unit with no such bars got one that
+drew nothing, which on a screen of 4,000 undamaged infantry was 5 ms a frame on a real machine for
+no pixels. An actor with no extra bars now gets the renderable only when its health is to be shown.
+
 **A held drag box is no longer heavier than "always show".** While a selection box is held open,
 every unit inside shows its bars. The set of units in the box was kept as a list and searched once
 per actor on the screen per frame, a box of 500 over a screen of 1,000 being half a million
@@ -78,11 +84,14 @@ the 15 FPS floor (a floor of 10 reaches the full 25).
 ## Measuring real games: the live bench
 
 The branch also carries the client bench (`OpenRA.Game/Support/LiveBench.cs`). It does nothing
-unless asked for on the command line. Started with
+unless asked for on the command line. `bench.cmd` in the checkout starts the game with it on,
+recording to `results\live` (anything else on its command line is passed on, so
+`bench.cmd Bench.NoFrameSkip=true` is the stock-drawing comparison run); by hand it is
 
-    OpenRA.exe Game.Mod=ra Bench.Out=C:\bench Bench.Live=true
+    launch-game.cmd Game.Mod=ra Bench.Live=true Bench.Out=C:\bench
 
-(for example from a shortcut or a `play.bat`), the game plays exactly as normal and writes, for
+from a checkout, or the same arguments to `OpenRA.exe` / `RedAlert.exe` in an install the DLLs
+were copied into. The game plays exactly as normal and writes, for
 every multiplayer or skirmish game of the session, `live-<time>-<map>.csv` with one row per tick
 — logic ms, how late the tick started, frames drawn and frames skipped, render ms, actors alive
 and in view, the server's tick scale, stalls — plus a `.json` summary and a line in

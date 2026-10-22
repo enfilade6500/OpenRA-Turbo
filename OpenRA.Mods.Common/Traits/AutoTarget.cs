@@ -146,6 +146,7 @@ namespace OpenRA.Mods.Common.Traits
 		IOverrideAutoTarget[] overrideAutoTarget;
 		INotifyStanceChanged[] notifyStanceChanged;
 		IEnumerable<AutoTargetPriorityInfo> activeTargetPriorities;
+		readonly List<AutoTargetPriorityInfo> validPriorities = new();
 		int conditionToken = Actor.InvalidConditionToken;
 
 		public void SetStance(Actor self, UnitStance value)
@@ -356,12 +357,18 @@ namespace OpenRA.Mods.Common.Traits
 			// (the usual case for a massed army with nothing in range), the walk over every neighbour is skipped.
 			// The result is the same: the walk would have yielded nothing. Without a frozen-actor pass to make
 			// either, the scan is over before its priority list is even built.
+			var pstart = OpenRA.Support.AggregateProfiler.Now();
 			var origin = self.CenterPosition;
 			var scanBox = new WVec(scanRange, scanRange, WDist.Zero);
 			var mayHaveHostile = attackStances != PlayerRelationship.Enemy || self.World.ActorMap is not ActorMap actorMap
 				|| actorMap.MayContainActorAppearingHostileTo(self.Owner, origin - scanBox, origin + scanBox);
 			if (!mayHaveHostile && !allowMove && !ab.Info.TargetFrozenActors)
+			{
+				if (pstart != 0)
+					OpenRA.Support.AggregateProfiler.Add("Scan:skipped", pstart);
+
 				return chosenTarget;
+			}
 
 			var activePriorities = activeTargetPriorities.ToList();
 			if (activePriorities.Count == 0)
@@ -391,11 +398,16 @@ namespace OpenRA.Mods.Common.Traits
 
 					// Check whether we can auto-target this actor
 					targetTypes = target.Actor.GetEnabledTargetTypes();
+					owner = target.Actor.Owner;
+
+					// PERF: The visibility checks below are the costly part of rejecting an actor; they come after the
+					// priority filter, which rejects most of what a scan sees (an undamaged ally, for a medic) more cheaply.
+					// Both are pure tests, so the outcome is the same whichever is made first.
+					if (!FilterPriorities(activePriorities, chosenTargetPriority, self, owner, targetTypes))
+						continue;
 
 					if (PreventsAutoTarget(self, target.Actor) || !target.Actor.CanBeViewedByPlayer(self.Owner))
 						continue;
-
-					owner = target.Actor.Owner;
 				}
 				else if (target.Type == TargetType.FrozenActor)
 				{
@@ -410,28 +422,10 @@ namespace OpenRA.Mods.Common.Traits
 
 					targetTypes = target.FrozenActor.TargetTypes;
 					owner = target.FrozenActor.Owner;
+					if (!FilterPriorities(activePriorities, chosenTargetPriority, self, owner, targetTypes))
+						continue;
 				}
 				else
-					continue;
-
-				var validPriorities = activePriorities.Where(ati =>
-				{
-					// Already have a higher priority target
-					if (ati.Priority < chosenTargetPriority)
-						return false;
-
-					// Incompatible relationship
-					if (!ati.ValidRelationships.HasRelationship(self.Owner.RelationshipWith(owner)))
-						return false;
-
-					// Incompatible target types
-					if (!ati.ValidTargets.Overlaps(targetTypes) || ati.InvalidTargets.Overlaps(targetTypes))
-						return false;
-
-					return true;
-				}).ToList();
-
-				if (validPriorities.Count == 0)
 					continue;
 
 				// Make sure that we can actually fire on the actor
@@ -461,7 +455,36 @@ namespace OpenRA.Mods.Common.Traits
 				}
 			}
 
+			if (pstart != 0)
+				OpenRA.Support.AggregateProfiler.Add(mayHaveHostile ? "Scan:walked" : "Scan:frozen-only", pstart);
+
 			return chosenTarget;
+		}
+
+		/// <summary>Fills validPriorities with the priorities that apply to a target of this owner and these types and that
+		/// could still beat the current choice, in order; false if there are none.</summary>
+		bool FilterPriorities(List<AutoTargetPriorityInfo> activePriorities, int chosenTargetPriority, Actor self, Player owner,
+			BitSet<TargetableType> targetTypes)
+		{
+			validPriorities.Clear();
+			foreach (var ati in activePriorities)
+			{
+				// Already have a higher priority target
+				if (ati.Priority < chosenTargetPriority)
+					continue;
+
+				// Incompatible relationship
+				if (!ati.ValidRelationships.HasRelationship(self.Owner.RelationshipWith(owner)))
+					continue;
+
+				// Incompatible target types
+				if (!ati.ValidTargets.Overlaps(targetTypes) || ati.InvalidTargets.Overlaps(targetTypes))
+					continue;
+
+				validPriorities.Add(ati);
+			}
+
+			return validPriorities.Count > 0;
 		}
 
 		static bool PreventsAutoTarget(Actor attacker, Actor target)

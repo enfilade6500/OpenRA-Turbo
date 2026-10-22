@@ -50,10 +50,22 @@ namespace OpenRA.Mods.Common.Traits
 			public ulong OwnerMask;
 			public ulong DisguisableMask;
 
+			// Owners that actors still listed here have changed to, until the position update that re-files them is
+			// applied (see AddPosition); cleared when it is
+			public ulong PendingOwnerMask;
+			public ulong PendingDisguisableMask;
+
+			// The aircraft among Actors, in the same order, for the repulsion scan every airborne aircraft makes every tick
+			// (over its neighbours of every kind otherwise, most of which are not aircraft)
+			public readonly List<Actor> Aircraft = new();
+
 			public void Add(Actor a, int ownerIndex)
 			{
 				Actors.Add(a);
 				OwnerIndices.Add(ownerIndex);
+				if (a.Info.HasTraitInfo<AircraftInfo>())
+					Aircraft.Add(a);
+
 				if (OwnerCounts[ownerIndex]++ == 0)
 					OwnerMask |= 1UL << ownerIndex;
 
@@ -90,6 +102,8 @@ namespace OpenRA.Mods.Common.Traits
 				{
 					Actors.RemoveRange(kept, removed);
 					OwnerIndices.RemoveRange(kept, removed);
+					if (Aircraft.Count > 0)
+						Aircraft.RemoveAll(shouldBeRemoved);
 				}
 
 				return removed;
@@ -238,6 +252,9 @@ namespace OpenRA.Mods.Common.Traits
 		readonly HashSet<Actor> addActorPosition = new();
 		readonly HashSet<Actor> removeActorPosition = new();
 		readonly Predicate<Actor> actorShouldBeRemoved;
+
+		// The bin each actor is currently listed in
+		readonly Dictionary<Actor, Bin> actorBin = new();
 
 		// Owners are given small indices as they are first seen, for the bit masks kept per bin
 		const int MaxOwners = 64;
@@ -537,11 +554,15 @@ namespace OpenRA.Mods.Common.Traits
 			{
 				foreach (var bin in bins)
 				{
+					bin.PendingOwnerMask = bin.PendingDisguisableMask = 0;
 					var removed = bin.RemoveAll(actorShouldBeRemoved);
 					if (removed > 0)
 						foreach (var t in bin.ProximityTriggers)
 							t.Dirty = true;
 				}
+
+				foreach (var a in removeActorPosition)
+					actorBin.Remove(a);
 
 				removeActorPosition.Clear();
 			}
@@ -554,6 +575,7 @@ namespace OpenRA.Mods.Common.Traits
 				var bin = BinAt(row, col);
 
 				bin.Add(a, OwnerIndex(a.Owner));
+				actorBin[a] = bin;
 				foreach (var t in bin.ProximityTriggers)
 					t.Dirty = true;
 			}
@@ -647,6 +669,17 @@ namespace OpenRA.Mods.Common.Traits
 		public void AddPosition(Actor a, IOccupySpace ios)
 		{
 			addActorPosition.Add(a);
+
+			// An actor whose owner changes is taken out of the world and put back, which queues a removal and an add; until
+			// the tick applies them it stays listed in its bin under its old owner, while a scan of that bin would see the
+			// new one. Note the new owner there, so the hostile precheck stays conservative over that tick.
+			if (actorBin.TryGetValue(a, out var bin))
+			{
+				var ownerIndex = OwnerIndex(a.Owner);
+				bin.PendingOwnerMask |= 1UL << ownerIndex;
+				if (a.EffectiveOwner != null)
+					bin.PendingDisguisableMask |= 1UL << ownerIndex;
+			}
 		}
 
 		public void RemovePosition(Actor a, IOccupySpace ios)
@@ -720,9 +753,9 @@ namespace OpenRA.Mods.Common.Traits
 		/// <summary>
 		/// False when no actor in the bins covering the box can appear hostile to the player (ActorExts.AppearsHostileTo):
 		/// none there is owned by an enemy, and none that can disguise itself is owned by anyone but an ally. The bins are
-		/// a superset of what ActorsInBox would yield, and the ownership is the one the actors were added under, so the
-		/// answer is conservative: whenever it is false, a scan of the box for hostile actors would find nothing.
-		/// A few bins and a mask each; the scan it saves walks every actor in them.
+		/// a superset of what ActorsInBox would yield, and the ownership is the one the actors were added under or have
+		/// changed to since (PendingOwnerMask), so the answer is conservative: whenever it is false, a scan of the box for
+		/// hostile actors would find nothing. A few bins and a mask each; the scan it saves walks every actor in them.
 		/// </summary>
 		public bool MayContainActorAppearingHostileTo(Player player, WPos a, WPos b)
 		{
@@ -749,12 +782,38 @@ namespace OpenRA.Mods.Common.Traits
 				for (var col = region.Left; col <= region.Right; col++)
 				{
 					var bin = BinAt(row, col);
-					if ((bin.OwnerMask & enemies) != 0 || (bin.DisguisableMask & notAllies) != 0)
+					if (((bin.OwnerMask | bin.PendingOwnerMask) & enemies) != 0
+						|| ((bin.DisguisableMask | bin.PendingDisguisableMask) & notAllies) != 0)
 						return true;
 				}
 			}
 
 			return false;
+		}
+
+		/// <summary>The aircraft that ActorsInBox would yield, in the same order, without walking everything else.</summary>
+		public IEnumerable<Actor> AircraftInBox(WPos a, WPos b)
+		{
+			var left = Math.Min(a.X, b.X);
+			var top = Math.Min(a.Y, b.Y);
+			var right = Math.Max(a.X, b.X);
+			var bottom = Math.Max(a.Y, b.Y);
+			var region = BinRectangleCoveringWorldArea(left, top, right, bottom);
+			for (var row = region.Top; row <= region.Bottom; row++)
+			{
+				for (var col = region.Left; col <= region.Right; col++)
+				{
+					foreach (var actor in BinAt(row, col).Aircraft)
+					{
+						if (actor.IsInWorld)
+						{
+							var c = actor.CenterPosition;
+							if (left <= c.X && c.X <= right && top <= c.Y && c.Y <= bottom)
+								yield return actor;
+						}
+					}
+				}
+			}
 		}
 
 		public IEnumerable<Actor> ActorsInBox(WPos a, WPos b)

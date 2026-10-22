@@ -14,8 +14,17 @@ and rejects the non-hostile ones one by one, so an army standing around spends m
 looking at itself, in proportion to how tightly it is massed. The actor map now records, per
 spatial bin, which owners have actors in it (and which have actors that could be disguised as
 someone else's); a unit that can only attack enemies asks that first and returns at once when the
-answer is nobody. When the walk does run, it runs unchanged and in the same order, so the chosen
-target is the same.
+answer is nobody. When the walk does run, it runs in the same order, so the chosen target is the
+same; within it, the cheap priority filter (relationship, target types) now comes before the costly
+visibility checks rather than after, which is what a medic needed — an undamaged ally fails by
+target type (the `Heal` type exists only while damaged), and stock paid the shroud lookups first for
+every one of them. A unit or building that changes owner is taken out of the world and put back,
+which lands in the bins a tick later; over that tick the bin also carries the owner it changed to,
+so a scan that stock would have made against a just-captured building is still made.
+
+**Aircraft repulsion walks only aircraft.** Every airborne aircraft pushes away from the others
+around it every tick, and found them by walking every unit under its flight path; the actor map
+keeps the aircraft of each bin in a side list, in the same order, and the walk uses that.
 
 **Things that are only drawn do less per tick.** Rank decorations do not tick while hidden or
 when they are a single still image; GPS dots compute their visibility for the player whose view
@@ -142,7 +151,11 @@ of the screen, so the cursor is worked out over the units as it would be in play
 4,000 infantry selected at 1755x987: 46 ms a frame, of which 12.6 producing the annotations and
 6.7 drawing them; the rest is the world pass (20 ms with nothing selected) and the cursor. The other `Bench.*` options
 (see the file's header) replay a recorded game as if it were live, with a padded or ballasted
-tick, a repeated world draw, a fixed camera or a whole-map zoom, for controlled experiments.
+tick, a repeated world draw, a fixed camera or a whole-map zoom, for controlled experiments;
+`Bench.Timestep=1` runs a replay flat out. `Bench.Profile=true` adds `<name>-profile.csv`, the
+simulation's time split by trait, activity, actor type, effect, idle-notification trait and scan
+outcome, sampled one tick in ten and summed every 250 ticks; it is what the measurements in this
+file came from. Off, it costs a static bool test per sample point.
 
 ## Building and installing
 

@@ -491,10 +491,18 @@ namespace OpenRA.Mods.Common.Traits
 			if (!cruising)
 				return WVec.Zero;
 
-			// PERF: Avoid LINQ.
+			// PERF: Avoid LINQ. And walk only the aircraft of the bins around (the actor map keeps them apart), not every
+			// unit under the flight path: the others contribute nothing here, and the aircraft come in the same order.
 			var repulsionForce = WVec.Zero;
-			foreach (var actor in self.World.FindActorsInCircle(self.CenterPosition, Info.IdealSeparation))
+			var separation = new WVec(Info.IdealSeparation, Info.IdealSeparation, WDist.Zero);
+			var nearby = self.World.ActorMap is ActorMap actorMap
+				? actorMap.AircraftInBox(self.CenterPosition - separation, self.CenterPosition + separation)
+				: self.World.FindActorsInCircle(self.CenterPosition, Info.IdealSeparation);
+			foreach (var actor in nearby)
 			{
+				if ((actor.CenterPosition - self.CenterPosition).HorizontalLengthSquared > Info.IdealSeparation.LengthSquared)
+					continue;
+
 				if (actor.IsDead)
 					continue;
 

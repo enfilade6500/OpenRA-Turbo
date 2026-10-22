@@ -450,14 +450,31 @@ namespace OpenRA
 			if (!Paused && (Type != WorldType.Shellmap || !gameSettings.PauseShellmap || WorldTick == 0))
 			{
 				WorldTick++;
+				Support.AggregateProfiler.BeginTick(WorldTick);
 
 				using (new PerfSample("tick_actors"))
 					foreach (var a in actors.Values)
+					{
+						var pstart = Support.AggregateProfiler.Now();
+						var activity = a.CurrentActivity;
 						a.Tick();
+						if (pstart != 0)
+						{
+							// Attribute the actor's tick to its top-level activity, to the innermost child activity that was
+							// actually running (a LeaveProduction or AttackMove is usually a Move underneath) and to the actor type
+							var leaf = activity?.LeafActivity;
+
+							Support.AggregateProfiler.Add("Activity:" + (activity?.GetType().Name ?? "idle"), pstart);
+							Support.AggregateProfiler.Add("Leaf:" + (leaf?.GetType().Name ?? "idle"), pstart);
+							Support.AggregateProfiler.Add("ActorTick:" + a.Info.Name, pstart);
+						}
+					}
 
 				ApplyToActorsWithTraitTimed<ITick>((actor, trait) => trait.Tick(actor), "Trait");
 
 				effects.DoTimed(e => e.Tick(this), "Effect");
+
+				Support.AggregateProfiler.Flush(WorldTick, actors.Count, effects.Count);
 			}
 
 			while (frameEndActions.Count != 0)
@@ -491,7 +508,7 @@ namespace OpenRA
 
 		public int SyncHash()
 		{
-			// using (new PerfSample("synchash"))
+			using (new PerfSample("synchash"))
 			{
 				var n = 0;
 				var ret = 0;

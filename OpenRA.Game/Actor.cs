@@ -281,8 +281,15 @@ namespace OpenRA
 				CurrentActivity = ActivityUtils.RunActivity(this, CurrentActivity);
 			}
 			else if (wasIdle)
+			{
 				foreach (var tickIdle in tickIdles)
+				{
+					var pstart = Support.AggregateProfiler.Now();
 					tickIdle.TickIdle(this);
+					if (pstart != 0)
+						Support.AggregateProfiler.Add("Idle:" + tickIdle.GetType().Name, pstart);
+				}
+			}
 		}
 
 		public IEnumerable<IRenderable> Render(WorldRenderer wr)

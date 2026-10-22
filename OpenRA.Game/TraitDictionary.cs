@@ -309,7 +309,10 @@ namespace OpenRA
 				{
 					var actor = actors[i];
 					var trait = traits[i];
+					var pstart = Support.AggregateProfiler.Now();
 					action(actor, trait);
+					if (pstart != 0)
+						Support.AggregateProfiler.Add(text + ":" + trait.GetType().Name, pstart);
 
 					start = PerfTickLogger.LogLongTick(start, text, trait);
 				}

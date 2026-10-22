@@ -103,7 +103,10 @@ namespace OpenRA
 				var start = PerfTickLogger.GetTimestamp();
 				while (enumerator.MoveNext())
 				{
+					var pstart = Support.AggregateProfiler.Now();
 					a(enumerator.Current);
+					if (pstart != 0)
+						Support.AggregateProfiler.Add(text + ":" + enumerator.Current.GetType().Name, pstart);
 					start = PerfTickLogger.LogLongTick(start, text, enumerator.Current);
 				}
 			}

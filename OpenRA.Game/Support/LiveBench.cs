@@ -45,6 +45,8 @@ namespace OpenRA.Support
 	///                          keep the camera centred on them and apply Bench.Zoom, to measure selection drawing;
 	///                          Bench.Select=camera does the camera and zoom without selecting, for the comparison;
 	///                          Bench.Select=drag holds a drag box over them instead (the rollover, every tick)
+	///   Bench.Profile=true     also write &lt;name&gt;-profile.csv: simulation time per trait, activity, actor type, effect and
+	///                          idle-notification trait, every 250 ticks (one tick in ten is attributed)
 	///   Bench.Live=true        record real games instead: play normally, and every multiplayer or skirmish game played in this
 	///                          session is written to Bench.Out as live-&lt;time&gt;-&lt;map&gt;.csv/.json with a line in summary.txt.
 	///                          No warp, no padding, no camera; the other Bench.* options are ignored. Per tick this adds the
@@ -153,6 +155,9 @@ namespace OpenRA.Support
 			}
 
 			Directory.CreateDirectory(outDir);
+			if (args.GetValue("Bench.Profile", "false").Equals("true", StringComparison.OrdinalIgnoreCase))
+				AggregateProfiler.Start(Path.Combine(outDir, name + "-"));
+
 			Console.WriteLine($"LiveBench: {(Live ? "recording live games" : name)} -> {outDir}");
 		}
 

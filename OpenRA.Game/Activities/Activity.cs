@@ -58,6 +58,19 @@ namespace OpenRA.Activities
 		}
 
 		Activity nextActivity;
+
+		/// <summary>Bench only: the innermost child activity currently queued under this one.</summary>
+		public Activity LeafActivity
+		{
+			get
+			{
+				var a = this;
+				while (a.childActivity != null)
+					a = a.childActivity;
+				return a;
+			}
+		}
+
 		public Activity NextActivity
 		{
 			get => SkipDoneActivities(nextActivity);

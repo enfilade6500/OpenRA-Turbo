@@ -47,8 +47,15 @@ namespace OpenRA.Mods.Common.Activities
 				remainingTicks--;
 
 			if (tickIdles != null)
+			{
 				foreach (var tickIdle in tickIdles)
+				{
+					var pstart = OpenRA.Support.AggregateProfiler.Now();
 					tickIdle.TickIdle(self);
+					if (pstart != 0)
+						OpenRA.Support.AggregateProfiler.Add("Idle:" + tickIdle.GetType().Name, pstart);
+				}
+			}
 
 			if (isIdleTurner)
 			{

@@ -515,6 +515,7 @@ namespace OpenRA
 			PerfHistory.Items["render_annot_gen"].HasNormalTick = false;
 			PerfHistory.Items["render_annot_draw"].HasNormalTick = false;
 			PerfHistory.Items["render_flush"].HasNormalTick = false;
+			PerfHistory.Items["render_cursor"].HasNormalTick = false;
 
 			JoinLocal();
 
@@ -737,7 +738,8 @@ namespace OpenRA
 							Cursor.SetCursor(null);
 						else
 						{
-							Cursor.SetCursor(Ui.Root.GetCursorOuter(Viewport.LastMousePos) ?? "default");
+							using (new PerfSample("render_cursor"))
+								Cursor.SetCursor(Ui.Root.GetCursorOuter(Viewport.LastMousePos) ?? "default");
 							Cursor.Render(Renderer);
 						}
 					}
@@ -766,6 +768,7 @@ namespace OpenRA
 			PerfHistory.Items["render_annot_gen"].Tick();
 			PerfHistory.Items["render_annot_draw"].Tick();
 			PerfHistory.Items["render_flush"].Tick();
+			PerfHistory.Items["render_cursor"].Tick();
 			PerfHistory.Items["terrain_lighting"].Tick();
 
 			if (benchStart != 0)

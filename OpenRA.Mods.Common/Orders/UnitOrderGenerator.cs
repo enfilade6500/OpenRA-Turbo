@@ -26,8 +26,9 @@ namespace OpenRA.Mods.Common.Orders
 		// The order list OrderForUnit works in, kept between calls (see there)
 		static List<(IIssueOrder Trait, IOrderTargeter Order)> orderBuffer;
 
-		// Above this many selected units the cursor is chosen from one unit of each type (see GetCursor)
-		const int CursorSampleTypesAbove = 100;
+		// A type with more than this many units selected answers the cursor question once, for all of them (see GetCursor)
+		const int CursorSampleTypeAbove = 100;
+		readonly Dictionary<ActorInfo, int> cursorTypeCounts = new();
 		readonly HashSet<ActorInfo> cursorSampledTypes = new();
 
 		// What the last cursor was worked out for, and what it was (see GetCursor)
@@ -114,26 +115,35 @@ namespace OpenRA.Mods.Common.Orders
 				cursorTargetFrozen = target.FrozenActor;
 				cursorTargetPos = targetPos;
 
-				// The first unit offering the highest-priority order decides. PERF: Above CursorSampleTypesAbove selected
-				// units, one unit of each type is asked rather than every unit: units of a type answer alike unless one is
-				// in an unusual state (out of ammunition, a trait disabled), and a selection that size is thousands of
-				// riflemen, not a handful of aircraft. A unit with no order at all (an ally's, a dead one) passes the
-				// question on to the next of its type. The orders issued on a click are still worked out per unit.
+				// The first unit offering the highest-priority order decides. PERF: A type with more than
+				// CursorSampleTypeAbove units selected is asked once, through its first unit, rather than once per unit:
+				// units of a type answer alike unless one is in an unusual state (out of ammunition, a trait disabled),
+				// and that many of one type is a blob of riflemen, not a flight of aircraft; the types with fewer units in
+				// the same selection are still asked unit by unit. A unit with no order at all (an ally's, a dead one)
+				// passes the question on to the next of its type. The orders issued on a click are worked out per unit.
 				UnitOrderResult cursorOrder = null;
 				var selection = world.Selection.Actors;
-				var sampleTypes = selection.Count > CursorSampleTypesAbove;
-				if (sampleTypes)
-					cursorSampledTypes.Clear();
+				cursorTypeCounts.Clear();
+				cursorSampledTypes.Clear();
+				if (selection.Count > CursorSampleTypeAbove)
+				{
+					foreach (var a in selection)
+					{
+						cursorTypeCounts.TryGetValue(a.Info, out var n);
+						cursorTypeCounts[a.Info] = n + 1;
+					}
+				}
 
 				foreach (var a in selection)
 				{
-					if (sampleTypes && !cursorSampledTypes.Add(a.Info))
+					var sampled = cursorTypeCounts.Count > 0 && cursorTypeCounts[a.Info] > CursorSampleTypeAbove;
+					if (sampled && !cursorSampledTypes.Add(a.Info))
 						continue;
 
 					var o = OrderForUnit(a, target, cell, mi);
 					if (o == null)
 					{
-						if (sampleTypes)
+						if (sampled)
 							cursorSampledTypes.Remove(a.Info);
 
 						continue;

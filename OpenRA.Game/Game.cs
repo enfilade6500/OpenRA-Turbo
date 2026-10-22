@@ -516,6 +516,7 @@ namespace OpenRA
 			PerfHistory.Items["render_annot_draw"].HasNormalTick = false;
 			PerfHistory.Items["render_flush"].HasNormalTick = false;
 			PerfHistory.Items["render_cursor"].HasNormalTick = false;
+			PerfHistory.Items["render_prepare"].HasNormalTick = false;
 
 			JoinLocal();
 
@@ -769,6 +770,7 @@ namespace OpenRA
 			PerfHistory.Items["render_annot_draw"].Tick();
 			PerfHistory.Items["render_flush"].Tick();
 			PerfHistory.Items["render_cursor"].Tick();
+			PerfHistory.Items["render_prepare"].Tick();
 			PerfHistory.Items["terrain_lighting"].Tick();
 
 			if (benchStart != 0)

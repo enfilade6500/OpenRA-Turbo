@@ -135,7 +135,9 @@ frame's selection work split from the rest: `annot_gen_ms` (producing the boxes,
 annotations), `annot_draw_ms` (turning them into vertices), `flush_ms` (handing the batches to
 the GL driver) and `cursor_ms` (choosing the mouse cursor from the selection's orders), from the
 perf items `render_annot_gen`, `render_annot_draw`, `render_flush` and `render_cursor`, which the
-in-game performance graph shows too. In the `Bench.Select` modes the mouse is put over the middle
+in-game performance graph shows too, and the frame's three stages, `prepare_ms` (deciding what to
+draw: the actors in view, their sprites, sorting), `world_ms` (drawing the terrain and the sprites)
+and `widgets_ms` (the user interface, radar included, plus the annotations and the cursor). In the `Bench.Select` modes the mouse is put over the middle
 of the screen, so the cursor is worked out over the units as it would be in play. A real machine,
 4,000 infantry selected at 1755x987: 46 ms a frame, of which 12.6 producing the annotations and
 6.7 drawing them; the rest is the world pass (20 ms with nothing selected) and the cursor. The other `Bench.*` options

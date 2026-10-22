@@ -23,6 +23,15 @@ is drawn rather than for every player; production bars compute their value when 
 animations (most standing units, every tree and wall) are not ticked, nor are looping animations
 that are currently hidden. Animations with a completion callback keep ticking exactly as before.
 
+**A large selection is drawn more cheaply.** Selecting a few hundred units was found to double the
+frame on a real machine. Each selected unit's corner brackets are now eight straight lines rather
+than four joined polylines, boxes and bars go through a many-lines call that prepares the colour
+once and writes each quad straight into the batch, and a unit's decoration bounds are computed
+once per frame instead of once for the box, once for the bars and once for the screen bounds.
+Measured headless with 1,000 infantry selected: the per-frame cost of the selection down by about a
+quarter. The rest of it is the per-unit bookkeeping (trait lookups, the renderable objects) and is
+the next thing to look at if it still matters.
+
 **Frames are skipped while the simulation is behind.** Stock draws at least one frame after every
 simulation tick, late or not; on a slow computer that frame is time taken from the game, and the
 player falls behind. Now, when a tick finishes after the next one was already due, the frame is
@@ -66,7 +75,10 @@ every multiplayer or skirmish game of the session, `live-<time>-<map>.csv` with 
 and in view, the server's tick scale, stalls — plus a `.json` summary and a line in
 `summary.txt`. Those files are how to see what this build does on a given computer in a given
 game, and what a slow computer is actually short of. `Bench.NoFrameSkip=true` records a game
-with a frame after every tick, as stock draws, for comparison. The other `Bench.*` options
+with a frame after every tick, as stock draws, for comparison. On a test map, `Bench.Select=all`
+keeps every unit selected and the camera on them (`=camera` for the camera alone), and the
+recorder's companion perf items `render_annot_gen`, `render_annot_draw` and `render_flush` split
+the frame's selection drawing from the rest. The other `Bench.*` options
 (see the file's header) replay a recorded game as if it were live, with a padded or ballasted
 tick, a repeated world draw, a fixed camera or a whole-map zoom, for controlled experiments.
 

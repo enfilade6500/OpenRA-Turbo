@@ -27,7 +27,9 @@ namespace OpenRA.Mods.Common.Traits
 		public IReadOnlyCollection<Actor> Actors => actors;
 
 		readonly HashSet<Actor> actors = new();
-		readonly List<Actor> rolloverActors = new();
+		// PERF: A set, not a list: RolloverContains is asked for every actor on the screen on every frame, and during a
+		// drag the rollover holds every unit in the box; a list made that a search of the box for each actor on screen.
+		readonly HashSet<Actor> rolloverActors = new();
 		World world;
 
 		INotifySelection[] worldNotifySelection;
@@ -157,7 +159,7 @@ namespace OpenRA.Mods.Common.Traits
 		public void SetRollover(IEnumerable<Actor> rollover)
 		{
 			rolloverActors.Clear();
-			rolloverActors.AddRange(rollover);
+			rolloverActors.UnionWith(rollover);
 		}
 
 		public bool RolloverContains(Actor a)

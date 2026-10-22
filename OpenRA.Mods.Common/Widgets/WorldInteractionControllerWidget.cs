@@ -51,10 +51,17 @@ namespace OpenRA.Mods.Common.Widgets
 				normalSelectionColor = Color.White;
 		}
 
+		// PERF: What is under the mouse or in the drag box only changes when the mouse, the modifiers or the world
+		// do; a frame drawn in between (fast computers draw several per tick) reuses the last answer instead of
+		// running the box query and the selection-priority sort again.
+		int2 rolloverStart, rolloverEnd;
+		Modifiers rolloverModifiers;
+		int rolloverTick = -1;
+
 		public override void Draw()
 		{
 			var modifiers = Game.GetModifierKeys();
-			IEnumerable<Actor> rollover;
+			int2 start, end;
 			if (IsValidDragbox)
 			{
 				var a = worldRenderer.Viewport.WorldToViewPx(dragStart);
@@ -69,15 +76,23 @@ namespace OpenRA.Mods.Common.Widgets
 				Game.Renderer.RgbaColorRenderer.DrawRect(a, b, 1, color);
 
 				// Render actors in the dragbox
-				rollover = SelectionUtils.SelectActorsInBoxWithDeadzone(World, dragStart, mousePos, modifiers);
+				start = dragStart;
+				end = mousePos;
 			}
 			else
 			{
 				// Render actors under the mouse pointer
-				rollover = SelectionUtils.SelectActorsInBoxWithDeadzone(World, mousePos, mousePos, modifiers);
+				start = end = mousePos;
 			}
 
-			worldRenderer.World.Selection.SetRollover(rollover);
+			if (start == rolloverStart && end == rolloverEnd && modifiers == rolloverModifiers && World.WorldTick == rolloverTick)
+				return;
+
+			rolloverStart = start;
+			rolloverEnd = end;
+			rolloverModifiers = modifiers;
+			rolloverTick = World.WorldTick;
+			worldRenderer.World.Selection.SetRollover(SelectionUtils.SelectActorsInBoxWithDeadzone(World, start, end, modifiers));
 		}
 
 		public override bool HandleMouseInput(MouseInput mi)

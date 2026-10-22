@@ -32,6 +32,15 @@ Measured headless with 1,000 infantry selected: the per-frame cost of the select
 quarter. The rest of it is the per-unit bookkeeping (trait lookups, the renderable objects) and is
 the next thing to look at if it still matters.
 
+**A held drag box is no longer heavier than "always show".** While a selection box is held open,
+every unit inside shows its bars. The set of units in the box was kept as a list and searched once
+per actor on the screen per frame, a box of 500 over a screen of 1,000 being half a million
+comparisons a frame; it is a set now. And the box's contents, with their selection-priority sort,
+were recomputed on every frame; they are recomputed when the mouse, the modifiers or the world
+tick change, which on a computer that draws several frames per tick is less than half as often.
+Measured headless with a box held over 1,000 units: the per-frame annotation work from 3.1 ms back
+to the 1.2 ms it costs with no box at all.
+
 **Frames are skipped while the simulation is behind.** Stock draws at least one frame after every
 simulation tick, late or not; on a slow computer that frame is time taken from the game, and the
 player falls behind. Now, when a tick finishes after the next one was already due, the frame is
@@ -76,7 +85,8 @@ and in view, the server's tick scale, stalls — plus a `.json` summary and a li
 `summary.txt`. Those files are how to see what this build does on a given computer in a given
 game, and what a slow computer is actually short of. `Bench.NoFrameSkip=true` records a game
 with a frame after every tick, as stock draws, for comparison. On a test map, `Bench.Select=all`
-keeps every unit selected and the camera on them (`=camera` for the camera alone), and the
+keeps every unit selected and the camera on them (`=camera` for the camera alone, `=drag` for a
+held drag box over them), and the
 recorder's companion perf items `render_annot_gen`, `render_annot_draw` and `render_flush` split
 the frame's selection drawing from the rest. The other `Bench.*` options
 (see the file's header) replay a recorded game as if it were live, with a padded or ballasted

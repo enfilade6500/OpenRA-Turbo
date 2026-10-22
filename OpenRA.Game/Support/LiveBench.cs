@@ -43,7 +43,8 @@ namespace OpenRA.Support
 	///   Bench.Timestep=ms      play at this many ms per tick instead of the replay's game speed (30 = "faster", 40 = normal)
 	///   Bench.Select=all       (with Bench.Live, on a test map) every second select all of the viewed player's units,
 	///                          keep the camera centred on them and apply Bench.Zoom, to measure selection drawing;
-	///                          Bench.Select=camera does the camera and zoom without selecting, for the comparison
+	///                          Bench.Select=camera does the camera and zoom without selecting, for the comparison;
+	///                          Bench.Select=drag holds a drag box over them instead (the rollover, every tick)
 	///   Bench.Live=true        record real games instead: play normally, and every multiplayer or skirmish game played in this
 	///                          session is written to Bench.Out as live-&lt;time&gt;-&lt;map&gt;.csv/.json with a line in summary.txt.
 	///                          No warp, no padding, no camera; the other Bench.* options are ignored. Per tick this adds the
@@ -64,7 +65,7 @@ namespace OpenRA.Support
 		static int warpToTick, durationTicks, timestepOverride, measureTimestep = 40;
 		static float logicFloorMs, ballastMs, zoom, zoomUsed;
 		static bool zoomToMap;
-		static bool selectAll, cameraOnUnits;
+		static bool selectAll, dragOverUnits, cameraOnUnits;
 		static bool selectZoomApplied;
 		static WPos mapCentre;
 
@@ -119,7 +120,8 @@ namespace OpenRA.Support
 			replayPath = args.GetValue("Launch.Replay", "");
 			var selectArg = args.GetValue("Bench.Select", "");
 			selectAll = selectArg.Equals("all", StringComparison.OrdinalIgnoreCase);
-			cameraOnUnits = selectAll || selectArg.Equals("camera", StringComparison.OrdinalIgnoreCase);
+			dragOverUnits = selectArg.Equals("drag", StringComparison.OrdinalIgnoreCase);
+			cameraOnUnits = selectAll || dragOverUnits || selectArg.Equals("camera", StringComparison.OrdinalIgnoreCase);
 
 			if (Live)
 			{
@@ -531,6 +533,12 @@ namespace OpenRA.Support
 
 				lastTick = w.WorldTick;
 				var om = Game.OrderManager;
+
+				if (dragOverUnits && wr != null)
+				{
+					var viewed = w.RenderPlayer ?? w.LocalPlayer;
+					w.Selection.SetRollover(w.Actors.Where(a => a.IsInWorld && !a.IsDead && a.Owner == viewed && a.Info.HasTraitInfo<Traits.ISelectableInfo>()));
+				}
 
 				// Bench.Select=all: keep every unit of the viewed player selected and in view (=camera: in view only)
 				if (cameraOnUnits && wr != null && w.WorldTick % 25 == 0)

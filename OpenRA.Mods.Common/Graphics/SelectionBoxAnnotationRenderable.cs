@@ -9,6 +9,7 @@
  */
 #endregion
 
+using System;
 using OpenRA.Graphics;
 using OpenRA.Primitives;
 
@@ -48,11 +49,17 @@ namespace OpenRA.Mods.Common.Graphics
 			var u = new float2(4, 0);
 			var v = new float2(0, 4);
 
-			var cr = Game.Renderer.RgbaColorRenderer;
-			cr.DrawLine(new float3[] { tl + u, tl, tl + v }, 1, color, true);
-			cr.DrawLine(new float3[] { tr - u, tr, tr + v }, 1, color, true);
-			cr.DrawLine(new float3[] { br - u, br, br - v }, 1, color, true);
-			cr.DrawLine(new float3[] { bl + u, bl, bl - v }, 1, color, true);
+			// PERF: Each corner bracket is two straight one-pixel lines meeting at the corner; drawing them as such
+			// costs eight quads and no allocation, where a joined polyline per corner cost an array and the
+			// mitre arithmetic for every selected unit on every frame.
+			Span<float3> lines = stackalloc float3[16]
+			{
+				tl + u, tl, tl, tl + v,
+				tr - u, tr, tr, tr + v,
+				br - u, br, br, br - v,
+				bl + u, bl, bl, bl - v,
+			};
+			Game.Renderer.RgbaColorRenderer.DrawLines(lines, 1, color);
 		}
 
 		public void RenderDebugGeometry(WorldRenderer wr) { }

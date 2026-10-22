@@ -83,8 +83,14 @@ namespace OpenRA.Mods.Common.Traits
 
 		Polygon Bounds(Actor self, WorldRenderer wr, WDist[] bounds)
 		{
+			return new Polygon(BoundsRect(self, wr, bounds));
+		}
+
+		// PERF: The rectangle alone, for callers that need no polygon (and so no vertex array per actor per frame)
+		Rectangle BoundsRect(Actor self, WorldRenderer wr, WDist[] bounds)
+		{
 			if (bounds == null)
-				return new Polygon(AutoBounds(self, wr));
+				return AutoBounds(self, wr);
 
 			// Convert from WDist to pixels
 			var size = new int2(bounds[0].Length * wr.TileSize.Width / wr.TileScale, bounds[1].Length * wr.TileSize.Height / wr.TileScale);
@@ -94,7 +100,7 @@ namespace OpenRA.Mods.Common.Traits
 				offset += new int2(bounds[2].Length * wr.TileSize.Width / wr.TileScale, bounds[3].Length * wr.TileSize.Height / wr.TileScale);
 
 			var xy = wr.ScreenPxPosition(self.CenterPosition) + offset;
-			return new Polygon(new Rectangle(xy.X, xy.Y, size.X, size.Y));
+			return new Rectangle(xy.X, xy.Y, size.X, size.Y);
 		}
 
 		Polygon IMouseBounds.MouseoverBounds(Actor self, WorldRenderer wr)
@@ -107,7 +113,7 @@ namespace OpenRA.Mods.Common.Traits
 
 		public Rectangle DecorationBounds(Actor self, WorldRenderer wr)
 		{
-			return Bounds(self, wr, info.DecorationBounds ?? info.Bounds).BoundingRect;
+			return BoundsRect(self, wr, info.DecorationBounds ?? info.Bounds);
 		}
 	}
 }

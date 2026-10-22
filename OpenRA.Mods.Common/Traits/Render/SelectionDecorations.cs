@@ -64,9 +64,25 @@ namespace OpenRA.Mods.Common.Traits.Render
 			return wr.Viewport.WorldToViewPx(GetDecorationPosition(self, wr, pos)) + GetDecorationMargin(pos, margin);
 		}
 
+		// PERF: The decoration bounds are asked for by the selection box, the bars and the screen bounds of the same
+		// actor in the same frame; compute them once per frame.
+		int boundsFrame = -1;
+		Rectangle boundsCache;
+
+		Rectangle DecorationBounds(Actor self, WorldRenderer wr)
+		{
+			if (boundsFrame != Game.RenderFrame)
+			{
+				boundsFrame = Game.RenderFrame;
+				boundsCache = interactable.DecorationBounds(self, wr);
+			}
+
+			return boundsCache;
+		}
+
 		protected override IEnumerable<IRenderable> RenderSelectionBox(Actor self, WorldRenderer wr, Color color)
 		{
-			var bounds = interactable.DecorationBounds(self, wr);
+			var bounds = DecorationBounds(self, wr);
 			yield return new SelectionBoxAnnotationRenderable(self, bounds, color);
 		}
 
@@ -76,7 +92,7 @@ namespace OpenRA.Mods.Common.Traits.Render
 			if (interactable is not Selectable || (!displayHealth && !displayExtra))
 				yield break;
 
-			var bounds = interactable.DecorationBounds(self, wr);
+			var bounds = DecorationBounds(self, wr);
 			yield return new SelectionBarsAnnotationRenderable(self, bounds, displayHealth, displayExtra);
 		}
 
@@ -87,7 +103,7 @@ namespace OpenRA.Mods.Common.Traits.Render
 
 		IEnumerable<Rectangle> IRender.ScreenBounds(Actor self, WorldRenderer wr)
 		{
-			yield return interactable.DecorationBounds(self, wr);
+			yield return DecorationBounds(self, wr);
 		}
 	}
 }

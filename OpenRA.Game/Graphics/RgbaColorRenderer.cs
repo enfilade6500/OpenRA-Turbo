@@ -169,6 +169,29 @@ namespace OpenRA.Graphics
 			}
 		}
 
+		/// <summary>
+		/// Draws straight lines of one width and colour, given as pairs of end points (start0, end0, start1, end1, ...).
+		/// PERF: The colour is prepared once and each line is one quad written straight into the batch; the selection
+		/// boxes and bars of a large selection are thousands of these per frame.
+		/// </summary>
+		public void DrawLines(ReadOnlySpan<float3> endPoints, float width, Color color, BlendMode blendMode = BlendMode.Alpha)
+		{
+			color = Util.PremultiplyAlpha(color);
+			var r = color.R / 255.0f;
+			var g = color.G / 255.0f;
+			var b = color.B / 255.0f;
+			var a = color.A / 255.0f;
+
+			for (var i = 0; i + 1 < endPoints.Length; i += 2)
+			{
+				var start = endPoints[i] + Offset;
+				var end = endPoints[i + 1] + Offset;
+				var delta = (end - start) / (end - start).XY.Length;
+				var corner = width / 2 * new float2(-delta.Y, delta.X);
+				parent.DrawRGBAQuad(start - corner, start + corner, end + corner, end - corner, r, g, b, a, blendMode);
+			}
+		}
+
 		public void DrawLine(IEnumerable<float3> points, float width, Color color, bool connectSegments = false, BlendMode blendMode = BlendMode.Alpha)
 		{
 			if (!connectSegments)

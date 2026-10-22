@@ -210,6 +210,24 @@ namespace OpenRA.Graphics
 			vertexCount += 4;
 		}
 
+		// For RGBAColorRenderer: a single-colour quad written straight into the batch (PERF: no intermediate vertices)
+		internal void DrawRGBAQuad(in float3 a, in float3 b, in float3 c, in float3 d, float r, float g, float bl, float al, BlendMode blendMode)
+		{
+			renderer.CurrentBatchRenderer = this;
+
+			if (currentBlend != blendMode || vertexCount + 4 > renderer.TempVertexBufferSize)
+				Flush();
+
+			currentBlend = blendMode;
+
+			// As RgbaColorRenderer.DrawLine: the colour travels in the texture coordinates, with a channel of 0 and no tint
+			vertices[vertexCount] = new Vertex(a.X, a.Y, a.Z, r, g, bl, al, 0, 1f, 1f, 1f, 1f);
+			vertices[vertexCount + 1] = new Vertex(b.X, b.Y, b.Z, r, g, bl, al, 0, 1f, 1f, 1f, 1f);
+			vertices[vertexCount + 2] = new Vertex(c.X, c.Y, c.Z, r, g, bl, al, 0, 1f, 1f, 1f, 1f);
+			vertices[vertexCount + 3] = new Vertex(d.X, d.Y, d.Z, r, g, bl, al, 0, 1f, 1f, 1f, 1f);
+			vertexCount += 4;
+		}
+
 		public void SetPalette(HardwarePalette palette)
 		{
 			shader.SetTexture("Palette", palette.Texture);

@@ -9,6 +9,7 @@
  */
 #endregion
 
+using System;
 using OpenRA.Graphics;
 using OpenRA.Primitives;
 using OpenRA.Traits;
@@ -72,13 +73,13 @@ namespace OpenRA.Mods.Common.Graphics
 
 			var z = float3.Lerp(start, end, value);
 			var cr = Game.Renderer.RgbaColorRenderer;
-			cr.DrawLine(start + p, end + p, 1, c);
+			Span<float3> outer = stackalloc float3[4] { start + p, end + p, start + r, end + r };
+			cr.DrawLines(outer, 1, c);
 			cr.DrawLine(start + q, end + q, 1, c2);
-			cr.DrawLine(start + r, end + r, 1, c);
 
-			cr.DrawLine(start + p, z + p, 1, barColor2);
+			Span<float3> fill = stackalloc float3[4] { start + p, z + p, start + r, z + r };
+			cr.DrawLines(fill, 1, barColor2);
 			cr.DrawLine(start + q, z + q, 1, barColor);
-			cr.DrawLine(start + r, z + r, 1, barColor2);
 		}
 
 		static Color GetHealthColor(IHealth health)
@@ -108,13 +109,13 @@ namespace OpenRA.Mods.Common.Graphics
 			var z = float3.Lerp(start, end, (float)health.HP / health.MaxHP);
 
 			var cr = Game.Renderer.RgbaColorRenderer;
-			cr.DrawLine(start + p, end + p, 1, c);
+			Span<float3> outer = stackalloc float3[4] { start + p, end + p, start + r, end + r };
+			cr.DrawLines(outer, 1, c);
 			cr.DrawLine(start + q, end + q, 1, c2);
-			cr.DrawLine(start + r, end + r, 1, c);
 
-			cr.DrawLine(start + p, z + p, 1, healthColor2);
+			Span<float3> fill = stackalloc float3[4] { start + p, z + p, start + r, z + r };
+			cr.DrawLines(fill, 1, healthColor2);
 			cr.DrawLine(start + q, z + q, 1, healthColor);
-			cr.DrawLine(start + r, z + r, 1, healthColor2);
 
 			if (health.DisplayHP != health.HP)
 			{

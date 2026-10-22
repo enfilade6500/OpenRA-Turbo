@@ -280,6 +280,17 @@ namespace OpenRA
 		public bool HideReplayChat = false;
 
 		public StatusBarsType StatusBars = StatusBarsType.Standard;
+
+		[Desc("Selected units show their health bar only while damaged (ammunition, cargo and other extra bars still show).")]
+		public bool SelectedHealthBarOnlyWhenDamaged = false;
+
+		[Desc("Units inside a selection box being dragged show their status bars.")]
+		public bool DragBoxStatusBars = true;
+
+		[Desc("The automatic status bars (\"Show when damaged\", \"Always show\") are not shown on infantry " +
+			"(actors with the Infantry target type).")]
+		public bool NoAutomaticStatusBarsOnInfantry = false;
+
 		public TargetLinesType TargetLines = TargetLinesType.Manual;
 		public bool UsePlayerStanceColors = false;
 

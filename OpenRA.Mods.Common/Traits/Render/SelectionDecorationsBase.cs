@@ -24,9 +24,11 @@ namespace OpenRA.Mods.Common.Traits.Render
 
 	public abstract class SelectionDecorationsBase : ISelectionDecorations, IRenderAnnotations, INotifyCreated
 	{
+		static readonly BitSet<TargetableType> InfantryTargetType = new("Infantry");
+
 		IDecoration[] decorations;
 		IDecoration[] selectedDecorations;
-		bool hasExtraBars;
+		bool hasExtraBars, isInfantry;
 
 		protected readonly SelectionDecorationsBaseInfo Info;
 
@@ -42,6 +44,7 @@ namespace OpenRA.Mods.Common.Traits.Render
 			selectedDecorations = self.TraitsImplementing<IDecoration>().ToArray();
 			decorations = selectedDecorations.Where(d => !d.RequiresSelection).ToArray();
 			hasExtraBars = self.TraitsImplementing<ISelectionBar>().Any();
+			isInfantry = self.Info.TraitInfos<ITargetableInfo>().Any(t => t.GetTargetTypes().Overlaps(InfantryTargetType));
 		}
 
 		static IEnumerable<WPos> ActivityTargetPath(Actor self)
@@ -74,14 +77,18 @@ namespace OpenRA.Mods.Common.Traits.Render
 		{
 			var selected = self.World.Selection.Contains(self);
 			var regularWorld = self.World.Type == WorldType.Regular;
-			var statusBars = Game.Settings.Game.StatusBars;
+			var gs = Game.Settings.Game;
+			var statusBars = gs.NoAutomaticStatusBarsOnInfantry && isInfantry ? StatusBarsType.Standard : gs.StatusBars;
 
 			// Health bars are shown when:
-			//  * actor is selected / in active drag rectangle / under the mouse
+			//  * actor is selected (only while damaged, if the player has chosen so) / in active drag rectangle / under the mouse
 			//  * status bar preference is set to "always show"
 			//  * status bar preference is set to "when damaged" and actor is damaged
-			var displayHealth = selected || (regularWorld && statusBars == StatusBarsType.AlwaysShow)
-				|| (regularWorld && statusBars == StatusBarsType.DamageShow && self.GetDamageState() != DamageState.Undamaged);
+			var whenDamaged = (selected && gs.SelectedHealthBarOnlyWhenDamaged) || (regularWorld && statusBars == StatusBarsType.DamageShow);
+			var damaged = whenDamaged && self.GetDamageState() != DamageState.Undamaged;
+			var displayHealth = (selected && (!gs.SelectedHealthBarOnlyWhenDamaged || damaged))
+				|| (regularWorld && statusBars == StatusBarsType.AlwaysShow)
+				|| (regularWorld && statusBars == StatusBarsType.DamageShow && damaged);
 
 			// Extra bars are shown when:
 			//  * actor is selected / in active drag rectangle / under the mouse

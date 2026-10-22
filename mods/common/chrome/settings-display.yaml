@@ -142,6 +142,41 @@ Container@DISPLAY_PANEL:
 					Width: PARENT_WIDTH - 24
 					Height: 20
 					Children:
+						Container@SELECTED_BAR_DAMAGED_CHECKBOX_CONTAINER:
+							X: 10
+							Width: PARENT_WIDTH / 2 - 20
+							Children:
+								Checkbox@SELECTED_BAR_DAMAGED_CHECKBOX:
+									Width: PARENT_WIDTH
+									Height: 20
+									Font: Regular
+									Text: Selected: health bar only when damaged
+						Container@DRAG_BOX_BARS_CHECKBOX_CONTAINER:
+							X: PARENT_WIDTH / 2 + 10
+							Width: PARENT_WIDTH / 2 - 20
+							Children:
+								Checkbox@DRAG_BOX_BARS_CHECKBOX:
+									Width: PARENT_WIDTH
+									Height: 20
+									Font: Regular
+									Text: Bars for units inside a selection box
+				Container@ROW:
+					Width: PARENT_WIDTH - 24
+					Height: 20
+					Children:
+						Container@NO_INFANTRY_BARS_CHECKBOX_CONTAINER:
+							X: 10
+							Width: PARENT_WIDTH / 2 - 20
+							Children:
+								Checkbox@NO_INFANTRY_BARS_CHECKBOX:
+									Width: PARENT_WIDTH
+									Height: 20
+									Font: Regular
+									Text: No automatic status bars on infantry
+				Container@ROW:
+					Width: PARENT_WIDTH - 24
+					Height: 20
+					Children:
 						Container@CURSORDOUBLE_CHECKBOX_CONTAINER:
 							X: 10
 							Width: PARENT_WIDTH / 2 - 20

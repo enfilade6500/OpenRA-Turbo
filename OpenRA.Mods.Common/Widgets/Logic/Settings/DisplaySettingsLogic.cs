@@ -150,6 +150,9 @@ namespace OpenRA.Mods.Common.Widgets.Logic
 			SettingsUtils.BindIntSliderPref(panel, "FRAME_LIMIT_SLIDER", ds, "MaxFramerate");
 			SettingsUtils.BindIntSliderPref(panel, "MIN_FRAMERATE_SLIDER", ds, "MinFramerate");
 			SettingsUtils.BindCheckboxPref(panel, "PLAYER_STANCE_COLORS_CHECKBOX", gs, "UsePlayerStanceColors");
+			SettingsUtils.BindCheckboxPref(panel, "SELECTED_BAR_DAMAGED_CHECKBOX", gs, "SelectedHealthBarOnlyWhenDamaged");
+			SettingsUtils.BindCheckboxPref(panel, "DRAG_BOX_BARS_CHECKBOX", gs, "DragBoxStatusBars");
+			SettingsUtils.BindCheckboxPref(panel, "NO_INFANTRY_BARS_CHECKBOX", gs, "NoAutomaticStatusBarsOnInfantry");
 
 			var cb = panel.Get<CheckboxWidget>("PLAYER_STANCE_COLORS_CHECKBOX");
 			cb.IsChecked = () => gs.UsePlayerStanceColors;
@@ -351,6 +354,9 @@ namespace OpenRA.Mods.Common.Widgets.Logic
 				ps.Name = dps.Name;
 
 				gs.TextNotificationPoolFilters = dgs.TextNotificationPoolFilters;
+				gs.SelectedHealthBarOnlyWhenDamaged = dgs.SelectedHealthBarOnlyWhenDamaged;
+				gs.DragBoxStatusBars = dgs.DragBoxStatusBars;
+				gs.NoAutomaticStatusBarsOnInfantry = dgs.NoAutomaticStatusBarsOnInfantry;
 			};
 		}
 

@@ -57,6 +57,7 @@ namespace OpenRA.Mods.Common.Widgets
 		int2 rolloverStart, rolloverEnd;
 		Modifiers rolloverModifiers;
 		int rolloverTick = -1;
+		bool rolloverCleared;
 
 		public override void Draw()
 		{
@@ -75,6 +76,20 @@ namespace OpenRA.Mods.Common.Widgets
 
 				Game.Renderer.RgbaColorRenderer.DrawRect(a, b, 1, color);
 
+				// Nothing is highlighted while the box is open if the player has chosen so; what it holds is worked out when
+				// it is released
+				if (!Game.Settings.Game.DragBoxStatusBars)
+				{
+					if (!rolloverCleared)
+					{
+						worldRenderer.World.Selection.SetRollover(Enumerable.Empty<Actor>());
+						rolloverCleared = true;
+						rolloverTick = -1;
+					}
+
+					return;
+				}
+
 				// Render actors in the dragbox
 				start = dragStart;
 				end = mousePos;
@@ -92,6 +107,7 @@ namespace OpenRA.Mods.Common.Widgets
 			rolloverEnd = end;
 			rolloverModifiers = modifiers;
 			rolloverTick = World.WorldTick;
+			rolloverCleared = false;
 			worldRenderer.World.Selection.SetRollover(SelectionUtils.SelectActorsInBoxWithDeadzone(World, start, end, modifiers));
 		}
 

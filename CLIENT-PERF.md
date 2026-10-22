@@ -61,6 +61,18 @@ to the 1.2 ms it costs with no box at all. On a real machine, a box held over 4,
 tick before, 28 after, against 20 with no box; the 8 ms left is the bars themselves. The search was
 quadratic, so the bigger the game, the more it mattered.
 
+**Three status-bar options**, in *Settings > Display* under the status bars dropdown, for players who
+would rather not pay for bars that tell them nothing (each is a few microseconds per unit per
+frame, which is nothing for twenty units and a frame-doubling for four thousand):
+"Selected: health bar only when damaged" (`Game.SelectedHealthBarOnlyWhenDamaged`) leaves the
+brackets and the extra bars (ammunition, cargo, capture progress) as they are but shows a selected
+unit's health bar only while it has lost health; "Bars for units inside a selection box"
+(`Game.DragBoxStatusBars`, on by default) turned off means a box being dragged highlights nothing
+until it is released, and the box's contents are not even worked out until then; "No automatic
+status bars on infantry" (`Game.NoAutomaticStatusBarsOnInfantry`) exempts infantry (actors with the
+`Infantry` target type) from "Show when damaged" and "Always show". All three are display settings
+of this client only.
+
 **Frames are skipped while the simulation is behind.** Stock draws at least one frame after every
 simulation tick, late or not; on a slow computer that frame is time taken from the game, and the
 player falls behind. Now, when a tick finishes after the next one was already due, the frame is
@@ -145,3 +157,5 @@ run in place as well, like any OpenRA checkout.
 - Hidden looping animations resume from where they stopped rather than from where they would
   have been. Nobody can tell, but it is a visible difference from stock in principle.
 - The settings labels are plain English, not translation keys.
+- "No automatic status bars on infantry" goes by the `Infantry` target type, which the official
+  mods all use; a mod that names its infantry differently gets no effect from it.

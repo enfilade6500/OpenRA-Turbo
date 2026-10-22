@@ -28,7 +28,7 @@ namespace OpenRA.Mods.Common.Traits
 		public override object Create(ActorInitializer init) { return new Targetable(this); }
 	}
 
-	public class Targetable : ConditionalTrait<TargetableInfo>, ITargetable
+	public class Targetable : ConditionalTrait<TargetableInfo>, ICachedTargetable
 	{
 		protected static readonly string[] None = Array.Empty<string>();
 		protected Cloak[] cloaks;
@@ -41,6 +41,20 @@ namespace OpenRA.Mods.Common.Traits
 			cloaks = self.TraitsImplementing<Cloak>().ToArray();
 
 			base.Created(self);
+		}
+
+		// The enabled types of this trait change only with its condition, which TraitEnabled/TraitDisabled report; a
+		// subclass could make TargetTypes dynamic without telling anyone, so only the trait itself makes the promise.
+		bool ICachedTargetable.EnabledTargetTypesAreCacheable => GetType() == typeof(Targetable);
+
+		protected override void TraitEnabled(Actor self)
+		{
+			self.EnabledTargetTypesChanged();
+		}
+
+		protected override void TraitDisabled(Actor self)
+		{
+			self.EnabledTargetTypesChanged();
 		}
 
 		public virtual bool TargetableBy(Actor self, Actor viewer)

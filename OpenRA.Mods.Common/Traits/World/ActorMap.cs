@@ -762,17 +762,7 @@ namespace OpenRA.Mods.Common.Traits
 			if (tooManyOwners)
 				return true;
 
-			ulong enemies = 0, notAllies = 0;
-			foreach (var kv in ownerIndices)
-			{
-				var relationship = player.RelationshipWith(kv.Key);
-				if (relationship == PlayerRelationship.Enemy)
-					enemies |= 1UL << kv.Value;
-
-				if (relationship != PlayerRelationship.Ally)
-					notAllies |= 1UL << kv.Value;
-			}
-
+			HostileMasks(player, out var enemies, out var notAllies);
 			if (enemies == 0 && notAllies == 0)
 				return false;
 
@@ -805,6 +795,80 @@ namespace OpenRA.Mods.Common.Traits
 				{
 					foreach (var actor in BinAt(row, col).Aircraft)
 					{
+						if (actor.IsInWorld)
+						{
+							var c = actor.CenterPosition;
+							if (left <= c.X && c.X <= right && top <= c.Y && c.Y <= bottom)
+								yield return actor;
+						}
+					}
+				}
+			}
+		}
+
+		/// <summary>The owners that are this player's enemies, and those that are not its allies, as bits.</summary>
+		void HostileMasks(Player player, out ulong enemies, out ulong notAllies)
+		{
+			enemies = notAllies = 0;
+			foreach (var kv in ownerIndices)
+			{
+				var relationship = player.RelationshipWith(kv.Key);
+				if (relationship == PlayerRelationship.Enemy)
+					enemies |= 1UL << kv.Value;
+
+				if (relationship != PlayerRelationship.Ally)
+					notAllies |= 1UL << kv.Value;
+			}
+		}
+
+		/// <summary>
+		/// The actors ActorsInBox would yield that could appear hostile to the player (owned by an enemy, or able to
+		/// disguise themselves and owned by anyone but an ally), in the same order, without walking the rest; an actor
+		/// owned by an ally can appear hostile only through a disguise, and nothing that attacks only enemies can
+		/// choose it then, so it is left out. Conservative like MayContainActorAppearingHostileTo: a bin with a pending
+		/// owner change among the wanted owners is walked whole, and the caller applies AppearsHostileTo as before.
+		/// </summary>
+		public IEnumerable<Actor> ActorsInBoxThatMayAppearHostileTo(Player player, WPos a, WPos b)
+		{
+			if (tooManyOwners)
+			{
+				foreach (var actor in ActorsInBox(a, b))
+					yield return actor;
+
+				yield break;
+			}
+
+			HostileMasks(player, out var enemies, out var notAllies);
+			if (enemies == 0 && notAllies == 0)
+				yield break;
+
+			var left = Math.Min(a.X, b.X);
+			var top = Math.Min(a.Y, b.Y);
+			var right = Math.Max(a.X, b.X);
+			var bottom = Math.Max(a.Y, b.Y);
+			var region = BinRectangleCoveringWorldArea(left, top, right, bottom);
+			for (var row = region.Top; row <= region.Bottom; row++)
+			{
+				for (var col = region.Left; col <= region.Right; col++)
+				{
+					var bin = BinAt(row, col);
+					if ((bin.OwnerMask & enemies) == 0 && (bin.DisguisableMask & notAllies) == 0
+						&& (bin.PendingOwnerMask & enemies) == 0 && (bin.PendingDisguisableMask & notAllies) == 0)
+						continue;
+
+					var whole = (bin.PendingOwnerMask & enemies) != 0 || (bin.PendingDisguisableMask & notAllies) != 0;
+					var actors = bin.Actors;
+					var owners = bin.OwnerIndices;
+					for (var i = 0; i < actors.Count; i++)
+					{
+						var actor = actors[i];
+						if (!whole)
+						{
+							var bit = 1UL << owners[i];
+							if ((bit & enemies) == 0 && (actor.EffectiveOwner == null || (bit & notAllies) == 0))
+								continue;
+						}
+
 						if (actor.IsInWorld)
 						{
 							var c = actor.CenterPosition;

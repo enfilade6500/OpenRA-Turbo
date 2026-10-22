@@ -198,6 +198,7 @@ namespace OpenRA
 				becomingIdles = becomingIdlesList.ToArray();
 				tickIdles = tickIdlesList.ToArray();
 				Targetables = targetablesList.ToArray();
+				enabledTargetTypesCacheable = Targetables.All(t => t is ICachedTargetable c && c.EnabledTargetTypesAreCacheable);
 				var targetablePositions = targetablePositionsList.ToArray();
 				EnabledTargetablePositions = targetablePositions.Where(Exts.IsTraitEnabled);
 				enabledTargetableWorldPositions = EnabledTargetablePositions.SelectMany(tp => tp.TargetablePositions(this));
@@ -523,14 +524,36 @@ namespace OpenRA
 			return targetTypes;
 		}
 
+		// PERF: The union below is asked for every candidate of every target scan; when every targetable promises to
+		// say when it changes (ICachedTargetable), the answer is kept until one does.
+		readonly bool enabledTargetTypesCacheable;
+		bool enabledTargetTypesValid;
+		BitSet<TargetableType> enabledTargetTypes;
+
 		public BitSet<TargetableType> GetEnabledTargetTypes()
 		{
+			if (enabledTargetTypesCacheable && enabledTargetTypesValid)
+				return enabledTargetTypes;
+
 			// PERF: Avoid LINQ.
 			var targetTypes = default(BitSet<TargetableType>);
 			foreach (var targetable in Targetables)
 				if (targetable.IsTraitEnabled())
 					targetTypes = targetTypes.Union(targetable.TargetTypes);
+
+			if (enabledTargetTypesCacheable)
+			{
+				enabledTargetTypes = targetTypes;
+				enabledTargetTypesValid = true;
+			}
+
 			return targetTypes;
+		}
+
+		/// <summary>A targetable's enabled state or types changed (see ICachedTargetable).</summary>
+		public void EnabledTargetTypesChanged()
+		{
+			enabledTargetTypesValid = false;
 		}
 
 		public bool IsTargetableBy(Actor byActor)

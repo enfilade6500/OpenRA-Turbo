@@ -374,9 +374,18 @@ namespace OpenRA.Mods.Common.Traits
 			if (activePriorities.Count == 0)
 				return chosenTarget;
 
-			var targetsInRange = mayHaveHostile
-				? self.World.FindActorsInCircle(origin, scanRange).Select(Target.FromActor)
-				: Enumerable.Empty<Target>();
+			// PERF: A unit that can only attack enemies walks only the actors that could appear hostile to it (the actor
+			// map yields them in the same order as everything), rather than every neighbour; the test below rejects
+			// the same ones it always did among those.
+			IEnumerable<Target> targetsInRange;
+			if (!mayHaveHostile)
+				targetsInRange = Enumerable.Empty<Target>();
+			else if (attackStances == PlayerRelationship.Enemy && self.World.ActorMap is ActorMap hostileMap)
+				targetsInRange = hostileMap.ActorsInBoxThatMayAppearHostileTo(self.Owner, origin - scanBox, origin + scanBox)
+					.Where(a => (a.CenterPosition - origin).HorizontalLengthSquared <= scanRange.LengthSquared)
+					.Select(Target.FromActor);
+			else
+				targetsInRange = self.World.FindActorsInCircle(origin, scanRange).Select(Target.FromActor);
 
 			if (allowMove || ab.Info.TargetFrozenActors)
 				targetsInRange = targetsInRange
@@ -429,13 +438,7 @@ namespace OpenRA.Mods.Common.Traits
 					continue;
 
 				// Make sure that we can actually fire on the actor
-				var armaments = ab.ChooseArmamentsForTarget(target, false);
-				if (!allowMove)
-					armaments = armaments.Where(arm =>
-						target.IsInRange(self.CenterPosition, arm.MaxRange()) &&
-						!target.IsInRange(self.CenterPosition, arm.Weapon.MinRange));
-
-				if (!armaments.Any())
+				if (!CanAttackFromHere(self, ab, target, allowMove))
 					continue;
 
 				if (!allowTurn && !ab.TargetInFiringArc(self, target, ab.Info.FacingTolerance))
@@ -459,6 +462,41 @@ namespace OpenRA.Mods.Common.Traits
 				OpenRA.Support.AggregateProfiler.Add(mayHaveHostile ? "Scan:walked" : "Scan:frozen-only", pstart);
 
 			return chosenTarget;
+		}
+
+		/// <summary>Whether any armament of the attack base could fire on the target: ChooseArmamentsForTarget(target, false),
+		/// filtered for range unless the unit may move, tested for Any(); the same tests in the same order, without the
+		/// enumerators, as a scan makes them for every candidate.</summary>
+		static bool CanAttackFromHere(Actor self, AttackBase ab, in Target target, bool allowMove)
+		{
+			if ((target.Type == TargetType.Terrain && !ab.Info.TargetTerrainWithoutForceFire) || target.Type == TargetType.Invalid
+				|| target.RequiresForceFire)
+				return false;
+
+			Player owner = null;
+			if (target.Type == TargetType.FrozenActor)
+				owner = target.FrozenActor.Owner;
+			else if (target.Type == TargetType.Actor)
+				owner = target.Actor.Owner;
+
+			foreach (var a in ab.Armaments)
+			{
+				if (a.IsTraitDisabled)
+					continue;
+
+				if (owner != null && !a.Info.TargetRelationships.HasRelationship(self.Owner.RelationshipWith(owner)))
+					continue;
+
+				if (!a.Weapon.IsValidAgainst(target, self.World, self))
+					continue;
+
+				if (!allowMove && (!target.IsInRange(self.CenterPosition, a.MaxRange()) || target.IsInRange(self.CenterPosition, a.Weapon.MinRange)))
+					continue;
+
+				return true;
+			}
+
+			return false;
 		}
 
 		/// <summary>Fills validPriorities with the priorities that apply to a target of this owner and these types and that

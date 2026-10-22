@@ -15,12 +15,20 @@ looking at itself, in proportion to how tightly it is massed. The actor map now 
 spatial bin, which owners have actors in it (and which have actors that could be disguised as
 someone else's); a unit that can only attack enemies asks that first and returns at once when the
 answer is nobody. When the walk does run, it runs in the same order, so the chosen target is the
-same; within it, the cheap priority filter (relationship, target types) now comes before the costly
-visibility checks rather than after, which is what a medic needed — an undamaged ally fails by
-target type (the `Heal` type exists only while damaged), and stock paid the shroud lookups first for
-every one of them. A unit or building that changes owner is taken out of the world and put back,
-which lands in the bins a tick later; over that tick the bin also carries the owner it changed to,
-so a scan that stock would have made against a just-captured building is still made.
+same. The walk itself, for the scans that do run (the front line, and medics, who look for allies),
+is cheaper three ways. A unit that attacks only enemies walks only the actors that could appear
+hostile to it (owned by an enemy, or disguisable and not an ally's), which the actor map yields in
+the same order as everything, instead of every neighbour; the stock hostility test still runs on
+those, so the candidates are the same. An actor's enabled target types, asked for every candidate,
+are kept between changes of its conditions rather than recomputed each time (`Targetable` says when
+they change). And the cheap priority filter (relationship, target types) comes before the costly
+visibility checks rather than after — what a medic needed, since an undamaged ally fails by target
+type (the `Heal` type exists only while damaged) and stock paid the shroud lookups first for every
+one of them. Late game on the Pit, profiled: a walking scan 48 µs down to 18, the 95 of them per
+tick 4.5 ms down to 1.7, medics 3.1 ms down to 1.7. A unit or building that changes owner is taken
+out of the world and put back, which lands in the bins a tick later; over that tick the bin also
+carries the owner it changed to, so a scan that stock would have made against a just-captured
+building is still made.
 
 **Aircraft repulsion walks only aircraft.** Every airborne aircraft pushes away from the others
 around it every tick, and found them by walking every unit under its flight path; the actor map

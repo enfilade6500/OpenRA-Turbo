@@ -165,7 +165,8 @@ namespace OpenRA.Mods.Common.Traits
 
 		public virtual WDist MaxRange()
 		{
-			return new WDist(Util.ApplyPercentageModifiers(Weapon.Range.Length, rangeModifiers.ToArray()));
+			// PERF: Applied in one pass, so no array is needed; a scan asks every candidate's range
+			return new WDist(Util.ApplyPercentageModifiers(Weapon.Range.Length, rangeModifiers));
 		}
 
 		protected override void Created(Actor self)

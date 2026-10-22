@@ -540,6 +540,16 @@ namespace OpenRA.Traits
 		bool RequiresForceFire { get; }
 	}
 
+	/// <summary>
+	/// An ITargetable whose enabled state and TargetTypes change only when it says so: it calls
+	/// Actor.EnabledTargetTypesChanged every time either does, and only while EnabledTargetTypesAreCacheable. An actor
+	/// all of whose targetables promise this keeps GetEnabledTargetTypes cached between changes.
+	/// </summary>
+	public interface ICachedTargetable : ITargetable
+	{
+		bool EnabledTargetTypesAreCacheable { get; }
+	}
+
 	[RequireExplicitImplementation]
 	public interface ITargetablePositions
 	{

@@ -291,6 +291,11 @@ namespace OpenRA
 			"(actors with the Infantry target type).")]
 		public bool NoAutomaticStatusBarsOnInfantry = false;
 
+		[Desc("Actor types that answer the mouse-cursor question once for all their selected units rather than once per unit: " +
+			"the basic infantry, which make up most of a big selection and answer alike whatever their state " +
+			"(e1 and e3 are the rifleman and the rocket soldier in Red Alert and Tiberian Dawn).")]
+		public string[] CursorSampleActorTypes = { "e1", "e3" };
+
 		public TargetLinesType TargetLines = TargetLinesType.Manual;
 		public bool UsePlayerStanceColors = false;
 

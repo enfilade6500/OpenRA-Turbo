@@ -78,7 +78,20 @@ namespace OpenRA.Support
 			public double Start, Late, Logic, Pad;
 			public int Frames, Skipped;
 			public double Render, Begin, Flip;
-			public int Actors, InView;
+			public double AnnotGen, AnnotDraw, Flush;
+			public int Actors, InView, Selected;
+
+			/// <summary>A frame was drawn in this tick: add its times, and the selection drawing's share of them.</summary>
+			public void AddFrame(double totalMs, double beginMs, double flipMs)
+			{
+				Frames++;
+				Render += totalMs;
+				Begin += beginMs;
+				Flip += flipMs;
+				AnnotGen += PerfHistory.Items["render_annot_gen"].LastValue;
+				AnnotDraw += PerfHistory.Items["render_annot_draw"].LastValue;
+				Flush += PerfHistory.Items["render_flush"].LastValue;
+			}
 
 			// Live games only
 			public float Zoom, Scale;
@@ -232,7 +245,8 @@ namespace OpenRA.Support
 				Late = pendingLate,
 				Logic = logic,
 				Pad = Math.Max(0, target - logic),
-				Actors = world.Actors.Count()
+				Actors = world.Actors.Count(),
+				Selected = world.Selection.Actors.Count
 			};
 
 			// Keep the camera where it was put, whatever the mouse does, and count what the frame has to draw: the actors the
@@ -289,7 +303,8 @@ namespace OpenRA.Support
 			}
 
 			csv = new StreamWriter(Path.Combine(outDir, name + ".csv"), false, Encoding.ASCII);
-			csv.WriteLine("tick,t_ms,late_ms,logic_ms,pad_ms,interval_ms,frames,skipped,render_ms,begin_ms,flip_ms,actors,in_view");
+			csv.WriteLine("tick,t_ms,late_ms,logic_ms,pad_ms,interval_ms,frames,skipped,render_ms,begin_ms,flip_ms,actors,in_view," +
+				"annot_gen_ms,annot_draw_ms,flush_ms,selected");
 			var clock = TimeSpan.FromMilliseconds((double)firstMeasuredTick * world.Timestep);
 			Console.WriteLine($"LiveBench: measuring from tick {firstMeasuredTick} (game clock {clock:m\\:ss}) at zoom {zoomUsed:F3}");
 		}
@@ -300,7 +315,8 @@ namespace OpenRA.Support
 			csv?.WriteLine(string.Join(",",
 				r.Tick.ToString(c), (r.Start - measureStart).ToString("F1", c), r.Late.ToString("F1", c), r.Logic.ToString("F2", c),
 				r.Pad.ToString("F2", c), (nextStart - r.Start).ToString("F2", c), r.Frames.ToString(c), r.Skipped.ToString(c),
-				r.Render.ToString("F2", c), r.Begin.ToString("F2", c), r.Flip.ToString("F2", c), r.Actors.ToString(c), r.InView.ToString(c)));
+				r.Render.ToString("F2", c), r.Begin.ToString("F2", c), r.Flip.ToString("F2", c), r.Actors.ToString(c), r.InView.ToString(c),
+				r.AnnotGen.ToString("F2", c), r.AnnotDraw.ToString("F2", c), r.Flush.ToString("F2", c), r.Selected.ToString(c)));
 		}
 
 		/// <summary>A frame was drawn; the times are what the main thread spent in it, in starting the world pass, and in the hand-off.</summary>
@@ -316,13 +332,7 @@ namespace OpenRA.Support
 				return;
 
 			var r = AllRecords.Count > 0 ? AllRecords[^1] : null;
-			if (r == null)
-				return;
-
-			r.Frames++;
-			r.Render += totalMs;
-			r.Begin += beginMs;
-			r.Flip += flipMs;
+			r?.AddFrame(totalMs, beginMs, flipMs);
 		}
 
 		public static void NoteSkippedFrame()
@@ -575,6 +585,7 @@ namespace OpenRA.Support
 					Logic = Now - tickStart,
 					Actors = lastActors,
 					InView = lastInView,
+					Selected = w.Selection.Actors.Count,
 					Zoom = wr?.Viewport.Zoom ?? 0,
 					Stalls = stalls,
 					Paused = paused,
@@ -598,11 +609,7 @@ namespace OpenRA.Support
 				if (world == null || Records.Count == 0)
 					return;
 
-				var r = Records[^1];
-				r.Frames++;
-				r.Render += totalMs;
-				r.Begin += beginMs;
-				r.Flip += flipMs;
+				Records[^1].AddFrame(totalMs, beginMs, flipMs);
 			}
 
 			public static void NoteSkippedFrame()
@@ -645,7 +652,7 @@ namespace OpenRA.Support
 				name = $"live-{DateTime.Now:yyyyMMdd-HHmmss}-{safeMap}";
 				csv = new StreamWriter(Path.Combine(outDir, name + ".csv"), false, Encoding.ASCII);
 				csv.WriteLine("tick,t_ms,late_ms,logic_ms,pad_ms,interval_ms,frames,skipped,render_ms,begin_ms,flip_ms,actors,in_view," +
-					"zoom,stalls,paused,netframe,queue,scale");
+					"annot_gen_ms,annot_draw_ms,flush_ms,selected,zoom,stalls,paused,netframe,queue,scale");
 				Console.WriteLine($"LiveBench: recording {name} ({connection}, {players} players, {timestep} ms ticks)");
 			}
 
@@ -656,6 +663,7 @@ namespace OpenRA.Support
 					r.Tick.ToString(c), (r.Start - start).ToString("F1", c), r.Late.ToString("F1", c), r.Logic.ToString("F2", c),
 					"0", (nextStart - r.Start).ToString("F2", c), r.Frames.ToString(c), r.Skipped.ToString(c),
 					r.Render.ToString("F2", c), r.Begin.ToString("F2", c), r.Flip.ToString("F2", c), r.Actors.ToString(c), r.InView.ToString(c),
+					r.AnnotGen.ToString("F2", c), r.AnnotDraw.ToString("F2", c), r.Flush.ToString("F2", c), r.Selected.ToString(c),
 					r.Zoom.ToString("F3", c), r.Stalls.ToString(c), r.Paused.ToString(c), r.NetFrame.ToString(c), r.Queue.ToString(c), r.Scale.ToString("F3", c)));
 			}
 
@@ -731,6 +739,10 @@ namespace OpenRA.Support
 					["render_per_frame_ms"] = frames > 0 ? (render - begin) / frames : 0,
 					["begin_mean_ms"] = Mean(r => r.Begin),
 					["flip_mean_ms"] = Mean(r => r.Flip),
+					["annot_gen_mean_ms"] = Mean(r => r.AnnotGen),
+					["annot_draw_mean_ms"] = Mean(r => r.AnnotDraw),
+					["flush_mean_ms"] = Mean(r => r.Flush),
+					["selected_mean"] = Mean(r => r.Selected),
 					["frames"] = frames,
 					["fps"] = wall > 0 ? 1000.0 * frames / wall : 0,
 					["late_ticks_pct"] = n > 0 ? 100.0 * Records.Count(r => r.Late >= 5) / n : 0,

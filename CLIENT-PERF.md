@@ -29,8 +29,10 @@ than four joined polylines, boxes and bars go through a many-lines call that pre
 once and writes each quad straight into the batch, and a unit's decoration bounds are computed
 once per frame instead of once for the box, once for the bars and once for the screen bounds.
 Measured headless with 1,000 infantry selected: the per-frame cost of the selection down by about a
-quarter. The rest of it is the per-unit bookkeeping (trait lookups, the renderable objects) and is
-the next thing to look at if it still matters.
+quarter. On a real machine with 4,000 infantry selected it was less: 48 ms a tick down to 45, over
+a 20 ms baseline, so most of what a selection costs there is still there. The live bench's
+annotation columns (below) say where it goes on a given machine; the per-unit bookkeeping (trait
+lookups, the renderable objects) is the next thing to look at if it still matters.
 
 **A held drag box is no longer heavier than "always show".** While a selection box is held open,
 every unit inside shows its bars. The set of units in the box was kept as a list and searched once
@@ -39,7 +41,9 @@ comparisons a frame; it is a set now. And the box's contents, with their selecti
 were recomputed on every frame; they are recomputed when the mouse, the modifiers or the world
 tick change, which on a computer that draws several frames per tick is less than half as often.
 Measured headless with a box held over 1,000 units: the per-frame annotation work from 3.1 ms back
-to the 1.2 ms it costs with no box at all.
+to the 1.2 ms it costs with no box at all. On a real machine, a box held over 4,000 infantry: 80 ms a
+tick before, 28 after, against 20 with no box; the 8 ms left is the bars themselves. The search was
+quadratic, so the bigger the game, the more it mattered.
 
 **Frames are skipped while the simulation is behind.** Stock draws at least one frame after every
 simulation tick, late or not; on a slow computer that frame is time taken from the game, and the
@@ -86,9 +90,11 @@ and in view, the server's tick scale, stalls — plus a `.json` summary and a li
 game, and what a slow computer is actually short of. `Bench.NoFrameSkip=true` records a game
 with a frame after every tick, as stock draws, for comparison. On a test map, `Bench.Select=all`
 keeps every unit selected and the camera on them (`=camera` for the camera alone, `=drag` for a
-held drag box over them), and the
-recorder's companion perf items `render_annot_gen`, `render_annot_draw` and `render_flush` split
-the frame's selection drawing from the rest. The other `Bench.*` options
+held drag box over them). Every row also carries `selected` (units selected that tick) and the
+frame's selection drawing split from the rest: `annot_gen_ms` (producing the boxes, bars and other
+annotations), `annot_draw_ms` (turning them into vertices) and `flush_ms` (handing the batches to
+the GL driver), from the perf items `render_annot_gen`, `render_annot_draw` and `render_flush`,
+which the in-game performance graph shows too. The other `Bench.*` options
 (see the file's header) replay a recorded game as if it were live, with a padded or ballasted
 tick, a repeated world draw, a fixed camera or a whole-map zoom, for controlled experiments.
 

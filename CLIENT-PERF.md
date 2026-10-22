@@ -48,7 +48,13 @@ the sort's buffers, every unit, every frame; it is now collected into a reused l
 place, with the same order. Measured headless, 1,000 infantry selected and the mouse over them:
 3.6 ms a frame down to 2.3. And between frames of the same world tick the answer cannot change
 unless the mouse reached another cell or target, a modifier changed or the selection did, so it is
-reused then; a computer that draws several frames per tick is spared all but the first.
+reused then; a computer that draws several frames per tick is spared all but the first. And above
+100 selected units, one unit of each *type* is asked rather than every unit: units of a type answer
+alike unless one is in an unusual state (out of ammunition, a trait disabled), and a selection that
+size is thousands of riflemen, not a handful of aircraft; a unit with no order at all (an ally's, a
+dead one) passes the question to the next of its type. The orders issued on a click are still
+worked out per unit, so only the icon could ever differ, and only in that unusual case. Headless,
+1,000 riflemen selected: 2.2 ms a frame to 0.3. Below 100 selected nothing changes.
 
 **A held drag box is no longer heavier than "always show".** While a selection box is held open,
 every unit inside shows its bars. The set of units in the box was kept as a list and searched once

@@ -26,6 +26,10 @@ namespace OpenRA.Mods.Common.Orders
 		// The order list OrderForUnit works in, kept between calls (see there)
 		static List<(IIssueOrder Trait, IOrderTargeter Order)> orderBuffer;
 
+		// Above this many selected units the cursor is chosen from one unit of each type (see GetCursor)
+		const int CursorSampleTypesAbove = 100;
+		readonly HashSet<ActorInfo> cursorSampledTypes = new();
+
 		// What the last cursor was worked out for, and what it was (see GetCursor)
 		int cursorTick = -1, cursorSelectionHash;
 		CPos cursorCell;
@@ -110,11 +114,35 @@ namespace OpenRA.Mods.Common.Orders
 				cursorTargetFrozen = target.FrozenActor;
 				cursorTargetPos = targetPos;
 
-				var ordersWithCursor = world.Selection.Actors
-					.Select(a => OrderForUnit(a, target, cell, mi))
-					.Where(o => o != null && o.Cursor != null);
+				// The first unit offering the highest-priority order decides. PERF: Above CursorSampleTypesAbove selected
+				// units, one unit of each type is asked rather than every unit: units of a type answer alike unless one is
+				// in an unusual state (out of ammunition, a trait disabled), and a selection that size is thousands of
+				// riflemen, not a handful of aircraft. A unit with no order at all (an ally's, a dead one) passes the
+				// question on to the next of its type. The orders issued on a click are still worked out per unit.
+				UnitOrderResult cursorOrder = null;
+				var selection = world.Selection.Actors;
+				var sampleTypes = selection.Count > CursorSampleTypesAbove;
+				if (sampleTypes)
+					cursorSampledTypes.Clear();
 
-				var cursorOrder = ordersWithCursor.MaxByOrDefault(o => o.Order.OrderPriority);
+				foreach (var a in selection)
+				{
+					if (sampleTypes && !cursorSampledTypes.Add(a.Info))
+						continue;
+
+					var o = OrderForUnit(a, target, cell, mi);
+					if (o == null)
+					{
+						if (sampleTypes)
+							cursorSampledTypes.Remove(a.Info);
+
+						continue;
+					}
+
+					if (o.Cursor != null && (cursorOrder == null || o.Order.OrderPriority > cursorOrder.Order.OrderPriority))
+						cursorOrder = o;
+				}
+
 				if (cursorOrder != null)
 					return cursor = cursorOrder.Cursor;
 

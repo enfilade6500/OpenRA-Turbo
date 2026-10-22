@@ -54,3 +54,6 @@ update.log
 
 # IntelliJ files
 .idea
+
+# Live bench recordings (bench.cmd)
+/results/

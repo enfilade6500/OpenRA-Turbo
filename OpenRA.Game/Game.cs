@@ -512,6 +512,9 @@ namespace OpenRA
 			PerfHistory.Items["render_widgets"].HasNormalTick = false;
 			PerfHistory.Items["render_flip"].HasNormalTick = false;
 			PerfHistory.Items["terrain_lighting"].HasNormalTick = false;
+			PerfHistory.Items["render_annot_gen"].HasNormalTick = false;
+			PerfHistory.Items["render_annot_draw"].HasNormalTick = false;
+			PerfHistory.Items["render_flush"].HasNormalTick = false;
 
 			JoinLocal();
 
@@ -723,7 +726,8 @@ namespace OpenRA
 					Renderer.BeginUI();
 
 					if (worldRenderer != null && !worldRenderer.World.IsLoadingGameSave)
-						worldRenderer.DrawAnnotations();
+						using (new PerfSample("render_annot_draw"))
+							worldRenderer.DrawAnnotations();
 
 					Ui.Draw();
 
@@ -759,6 +763,9 @@ namespace OpenRA
 			PerfHistory.Items["render_world"].Tick();
 			PerfHistory.Items["render_widgets"].Tick();
 			PerfHistory.Items["render_flip"].Tick();
+			PerfHistory.Items["render_annot_gen"].Tick();
+			PerfHistory.Items["render_annot_draw"].Tick();
+			PerfHistory.Items["render_flush"].Tick();
 			PerfHistory.Items["terrain_lighting"].Tick();
 
 			if (benchStart != 0)

@@ -14,6 +14,7 @@ using System.Collections.Generic;
 using System.Linq;
 using OpenRA.Effects;
 using OpenRA.Primitives;
+using OpenRA.Support;
 using OpenRA.Traits;
 
 namespace OpenRA.Graphics
@@ -258,7 +259,8 @@ namespace OpenRA.Graphics
 
 			GenerateRenderables();
 			GenerateOverlayRenderables();
-			GenerateAnnotationRenderables();
+			using (new PerfSample("render_annot_gen"))
+				GenerateAnnotationRenderables();
 
 			onScreenActors.Clear();
 		}

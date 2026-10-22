@@ -41,6 +41,9 @@ namespace OpenRA.Support
 	///                          on the screen (default: the zoom the Battlefield Camera setting gives; Graphics.ViewportDistance=Far
 	///                          selects another setting for the run)
 	///   Bench.Timestep=ms      play at this many ms per tick instead of the replay's game speed (30 = "faster", 40 = normal)
+	///   Bench.Select=all       (with Bench.Live, on a test map) every second select all of the viewed player's units,
+	///                          keep the camera centred on them and apply Bench.Zoom, to measure selection drawing;
+	///                          Bench.Select=camera does the camera and zoom without selecting, for the comparison
 	///   Bench.Live=true        record real games instead: play normally, and every multiplayer or skirmish game played in this
 	///                          session is written to Bench.Out as live-&lt;time&gt;-&lt;map&gt;.csv/.json with a line in summary.txt.
 	///                          No warp, no padding, no camera; the other Bench.* options are ignored. Per tick this adds the
@@ -61,6 +64,8 @@ namespace OpenRA.Support
 		static int warpToTick, durationTicks, timestepOverride, measureTimestep = 40;
 		static float logicFloorMs, ballastMs, zoom, zoomUsed;
 		static bool zoomToMap;
+		static bool selectAll, cameraOnUnits;
+		static bool selectZoomApplied;
 		static WPos mapCentre;
 
 		static readonly Stopwatch Clock = Stopwatch.StartNew();
@@ -112,13 +117,18 @@ namespace OpenRA.Support
 			zoom = zoomToMap ? 0 : Parse(zoomArg);
 			timestepOverride = (int)Parse(args.GetValue("Bench.Timestep", "0"));
 			replayPath = args.GetValue("Launch.Replay", "");
+			var selectArg = args.GetValue("Bench.Select", "");
+			selectAll = selectArg.Equals("all", StringComparison.OrdinalIgnoreCase);
+			cameraOnUnits = selectAll || selectArg.Equals("camera", StringComparison.OrdinalIgnoreCase);
 
 			if (Live)
 			{
 				// Nothing may change how the game plays: this mode only watches (Bench.NoFrameSkip stays, to record real
 				// games with a frame after every tick for comparison; it changes what is drawn, not what is simulated)
 				warpToTick = durationTicks = timestepOverride = 0;
-				logicFloorMs = ballastMs = zoom = 0;
+				logicFloorMs = ballastMs = 0;
+				if (!cameraOnUnits)
+					zoom = 0;
 				RenderRepeat = 1;
 				zoomToMap = false;
 			}
@@ -522,6 +532,26 @@ namespace OpenRA.Support
 				lastTick = w.WorldTick;
 				var om = Game.OrderManager;
 
+				// Bench.Select=all: keep every unit of the viewed player selected and in view (=camera: in view only)
+				if (cameraOnUnits && wr != null && w.WorldTick % 25 == 0)
+				{
+					var viewed = w.RenderPlayer ?? w.LocalPlayer;
+					var units = w.Actors.Where(a => a.IsInWorld && !a.IsDead && a.Owner == viewed && a.Info.HasTraitInfo<Traits.ISelectableInfo>()).ToList();
+					if (selectAll)
+						w.Selection.Combine(w, units, false, false);
+
+					if (units.Count > 0)
+						wr.Viewport.Center(units);
+
+					if (zoom > 0 && !selectZoomApplied)
+					{
+						selectZoomApplied = true;
+						if (zoom < wr.Viewport.MinZoom)
+							wr.Viewport.UnlockMinimumZoom(0.999f * (float)zoom / wr.Viewport.MinZoom);
+						wr.Viewport.AdjustZoom((float)Math.Log(zoom / wr.Viewport.Zoom));
+					}
+				}
+
 				// What the frame has to draw, sampled every fifth tick to keep the recorder's own cost negligible
 				if (wr != null && w.WorldTick % 5 == 0)
 				{
@@ -731,7 +761,8 @@ namespace OpenRA.Support
 
 				var line = string.Format(c,
 					"{0,-40} {1,2}ms {2,-16} {3,-5} {4,4} {5,2}p | {6,6:F1} min speed {7,5:F1}% stalls {8,4:F1}% paused {9,4} | logic {10,5:F1} p95 {11,5:F1} max {12,5:F0} " +
-					"| frame {13,4:F1} begin {14,4:F1} flip {15,4:F1} fps {16,4:F0} late {17,3:F0}% resets {18} | slowed {19,4:F1}% catchup {20,4:F1}% queue {21,4:F1} | zoom {22,4:F2} view {23,4:F0}/{24,4:F0} | {25}",
+					"| frame {13,4:F1} begin {14,4:F1} flip {15,4:F1} fps {16,4:F0} late {17,3:F0}% resets {18} " +
+					"| slowed {19,4:F1}% catchup {20,4:F1}% queue {21,4:F1} | zoom {22,4:F2} view {23,4:F0}/{24,4:F0} | {25}",
 					name, timestep, g.Mode, g.VSync ? "vsync" : "-", g.CapFramerateToGameFps ? "tick" : g.CapFramerate ? g.MaxFramerate.ToString(c) : "-", players,
 					wall / 60000, summary["realised_speed_pct"], summary["stall_pct"], pausedTicks, summary["logic_p50_ms"], summary["logic_p95_ms"], summary["logic_max_ms"],
 					summary["render_per_frame_ms"], summary["begin_mean_ms"], summary["flip_mean_ms"], summary["fps"], summary["late_ticks_pct"], resets,

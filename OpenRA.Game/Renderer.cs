@@ -362,8 +362,11 @@ namespace OpenRA
 
 		public void DrawQuadBatch(ref Vertex[] vertices, IShader shader, int numVertices)
 		{
-			tempVertexBuffer.SetData(ref vertices, numVertices);
-			DrawQuadBatch(tempVertexBuffer, quadIndexBuffer, shader, numVertices / 4 * 6, 0);
+			using (new PerfSample("render_flush"))
+			{
+				tempVertexBuffer.SetData(ref vertices, numVertices);
+				DrawQuadBatch(tempVertexBuffer, quadIndexBuffer, shader, numVertices / 4 * 6, 0);
+			}
 		}
 
 		public void DrawQuadBatch<T>(IVertexBuffer<T> vertices, IIndexBuffer indices, IShader shader, int numIndices, int start)

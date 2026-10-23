@@ -122,6 +122,10 @@ simulation time per tick:
 
 The playback stayed in sync with the replay's recorded sync hashes for all 86,000 ticks; the
 replay was recorded from stock clients, which is the test that the simulation is unchanged.
+The later scan work (walking only the hostile, the cached target types, the aircraft list, the
+cheaper rejection) was measured on a slower day on the same machine, so its numbers are relative:
+against the build of the table, the whole game another 11% less, minutes 45-55 12% less
+(35.2 to 30.9 ms there that day, p95 48 to 41), again in sync for every tick.
 
 Synthetic map, 2,000 idle riflemen massed in one blob: 34.7 ms per tick stock, 9.2 ms here.
 

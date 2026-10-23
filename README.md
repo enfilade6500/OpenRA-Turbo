@@ -1,22 +1,19 @@
 # OpenRA Turbo
 
-A faster client for OpenRA release-20250330. It simulates exactly the same game, so it plays on the usual servers with the usual clients, in the same games, with the same replays. In a big 8-player match it spends about 40% less time per tick in the late game and a third less over the whole game, and selecting hundreds of units no longer doubles the cost of a frame.
+OpenRA Turbo is a fork of the standard OpenRA release client with only a few small tweaks to let it run faster with many units on the map. It is a drop-in replacement: the same game, the same servers, the same players and replays, nothing sent anywhere and nothing changed on the server side. With several hundreds or thousands of units in a game, it can save roughly 40% of the time per tick, give or take depending on conditions.
 
-Nothing is sent anywhere, nothing changes on servers, and nothing about the rules changes: the work is in how the client gets to the same result. The main menu reads `release-20250330 (Turbo 1.0)` when it is installed.
+## Features
 
-## For players
-
-Installed, with nothing to set up:
+Under the hood:
 
 - **Big games run faster.** Idle units no longer re-check all their neighbours for targets every few ticks, aircraft keep their distance from each other without looking at every unit below them, and things that only get drawn (standing animations, rank icons, GPS dots) stop doing work for the simulation.
-- **Big selections draw faster.** Selecting hundreds of units, or holding a drag box over them, used to double the time a frame took; now it adds little.
-- **The game keeps its speed on a slow computer.** When the simulation falls behind, frames are skipped until it has caught up (never below 20 frames per second), instead of the game slowing down for you and everyone waiting on you.
+- **Big selections draw faster.** Selecting thousands of units, or holding a drag box over them, used to double the time a frame took; now it adds little.
 - **Scrolling keeps its speed** at any frame rate; the standard client slows it down below 40 FPS.
 - **"Show when damaged" is free** on undamaged units, and the mouse pointer over a huge selection is chosen without asking every rifleman.
 
-Optional, in *Settings > Turbo*:
+Defaults and options, in *Settings > Turbo*:
 
-- The frame rate below which frames are no longer skipped (default 20; 25 means never skip).
+- **Frame skipping.** When the simulation falls behind, frames are skipped until it has caught up, so the game keeps its speed instead of slowing down for you and everyone waiting on you. By default it never goes below 20 frames per second; the slider sets that floor (25 means never skip).
 - A forced low frame rate, to see what one feels like before you need to.
 - Three ways to draw fewer status bars when thousands of units are on the screen: health bars on selected units only while damaged, no bars inside a drag box, no automatic bars on infantry.
 

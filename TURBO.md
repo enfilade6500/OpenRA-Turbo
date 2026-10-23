@@ -195,7 +195,8 @@ Then copy, from the build output into an installed release-20250330:
     mods/common/chrome/settings-display.yaml
     mods/common/chrome/settings-advanced.yaml
     mods/common/chrome/settings-turbo.yaml
-    mods/<mod>/mod.yaml            (lists the new settings page; ra, cnc, d2k and ts each)
+    mods/common/fluent/turbo.ftl
+    mods/<mod>/mod.yaml            (lists the new settings page and its strings; ra, cnc, d2k and ts each)
     mods/cnc/chrome/settings.yaml  (Tiberian Dawn has its own)
 
 over the files of the same name (keep copies of the originals to go back). The whole build can be
@@ -207,7 +208,7 @@ run in place as well, like any OpenRA checkout.
   The replay evidence is strong; a small game before a big one is still sensible.
 - Hidden looping animations resume from where they stopped rather than from where they would
   have been. Nobody can tell, but it is a visible difference from stock in principle.
-- The settings labels are plain English, not translation keys.
+- The settings labels are English only (keys in `mods/common/fluent/turbo.ftl`, one language).
 - `bench.cmd Bench.Settings=true` opens and closes the settings dialog headlessly at the menu, which
   builds every settings page; it is the check that a layout change has not broken one.
   `Bench.Settings=TURBO_PANEL` (any page id) opens that page instead and saves a screenshot of it

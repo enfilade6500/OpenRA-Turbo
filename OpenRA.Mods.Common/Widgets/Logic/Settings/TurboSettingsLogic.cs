@@ -10,6 +10,7 @@
 #endregion
 
 using System;
+using OpenRA.Primitives;
 using OpenRA.Widgets;
 
 namespace OpenRA.Mods.Common.Widgets.Logic
@@ -17,6 +18,21 @@ namespace OpenRA.Mods.Common.Widgets.Logic
 	/// <summary>The Turbo tab of the settings: what this client does differently, and the knobs for it (TURBO.md).</summary>
 	public class TurboSettingsLogic : ChromeLogic
 	{
+		[FluentReference("version")]
+		const string Title = "label-turbo-title";
+
+		[FluentReference("fps")]
+		const string MinFramerate = "label-turbo-min-framerate";
+
+		[FluentReference]
+		const string MinFramerateNever = "label-turbo-min-framerate-never";
+
+		[FluentReference("fps")]
+		const string ForceFramerate = "label-turbo-force-framerate";
+
+		[FluentReference]
+		const string ForceFramerateOff = "label-turbo-force-framerate-off";
+
 		readonly GraphicSettings ds = Game.Settings.Graphics;
 		readonly DebugSettings dbs = Game.Settings.Debug;
 		readonly GameSettings gs = Game.Settings.Game;
@@ -31,19 +47,24 @@ namespace OpenRA.Mods.Common.Widgets.Logic
 
 		Func<bool> InitPanel(Widget panel)
 		{
-			panel.Get<LabelWidget>("TURBO_TITLE").GetText = () => "OpenRA " + Turbo.Label;
+			var title = FluentProvider.GetMessage(Title, "version", Turbo.Version);
+			panel.Get<LabelWidget>("TURBO_TITLE").GetText = () => title;
 
 			// Frames skipped while the simulation is behind, down to this rate
 			SettingsUtils.BindIntSliderPref(panel, "MIN_FRAMERATE_SLIDER", ds, "MinFramerate");
+			var minFramerateNever = FluentProvider.GetMessage(MinFramerateNever);
+			var minFramerateLabel = new CachedTransform<int, string>(fps => FluentProvider.GetMessage(MinFramerate, "fps", fps));
 			panel.Get<LabelWidget>("MIN_FRAMERATE_LABEL").GetText = () => ds.MinFramerate >= 25
-				? "Catching up: never skip frames"
-				: $"Catching up: skip frames down to {ds.MinFramerate} FPS";
+				? minFramerateNever
+				: minFramerateLabel.Update(ds.MinFramerate);
 
 			// A forced low frame rate, to try out what one feels like
 			SettingsUtils.BindIntSliderPref(panel, "FORCE_FRAMERATE_SLIDER", dbs, "ForceFramerate");
+			var forceFramerateOff = FluentProvider.GetMessage(ForceFramerateOff);
+			var forceFramerateLabel = new CachedTransform<int, string>(fps => FluentProvider.GetMessage(ForceFramerate, "fps", fps));
 			panel.Get<LabelWidget>("FORCE_FRAMERATE_LABEL").GetText = () => dbs.ForceFramerate > 0
-				? $"Force a low frame rate: {dbs.ForceFramerate} FPS"
-				: "Force a low frame rate: off";
+				? forceFramerateLabel.Update(dbs.ForceFramerate)
+				: forceFramerateOff;
 
 			// Status bars: the game's own setting, and the three refinements
 			var statusBarsDropDown = panel.Get<DropDownButtonWidget>("STATUS_BAR_DROPDOWN");

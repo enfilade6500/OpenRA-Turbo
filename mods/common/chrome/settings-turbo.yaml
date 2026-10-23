@@ -34,19 +34,19 @@ Container@TURBO_PANEL:
 									Width: PARENT_WIDTH
 									Height: 20
 									Font: Tiny
-									Text: A faster client for this release. The game it simulates is the same one, so it plays on the usual
+									Text: label-turbo-desc-a
 								Label@TURBO_DESC_B:
 									Y: 15
 									Width: PARENT_WIDTH
 									Height: 20
 									Font: Tiny
-									Text: servers with the usual clients. Everything on this page affects this computer only. Big games are
+									Text: label-turbo-desc-b
 								Label@TURBO_DESC_C:
 									Y: 30
 									Width: PARENT_WIDTH
 									Height: 20
 									Font: Tiny
-									Text: faster without touching anything here; the settings below are for when frames are what is short.
+									Text: label-turbo-desc-c
 				Background@FRAMES_SECTION_HEADER:
 					X: 5
 					Width: PARENT_WIDTH - 24 - 10
@@ -59,7 +59,7 @@ Container@TURBO_PANEL:
 							Height: PARENT_HEIGHT
 							Font: TinyBold
 							Align: Center
-							Text: Frames
+							Text: label-turbo-frames-section
 				Container@ROW:
 					Width: PARENT_WIDTH - 24
 					Height: 50
@@ -88,19 +88,19 @@ Container@TURBO_PANEL:
 									Width: PARENT_WIDTH
 									Height: 20
 									Font: Tiny
-									Text: When your computer cannot keep up with the game, frames
+									Text: label-turbo-min-framerate-desc-a
 								Label@MIN_FRAMERATE_DESC_B:
 									Y: 15
 									Width: PARENT_WIDTH
 									Height: 20
 									Font: Tiny
-									Text: are skipped so the game runs at full speed, never below this
+									Text: label-turbo-min-framerate-desc-b
 								Label@MIN_FRAMERATE_DESC_C:
 									Y: 30
 									Width: PARENT_WIDTH
 									Height: 20
 									Font: Tiny
-									Text: rate (scrolling keeps its speed whatever the frame rate)
+									Text: label-turbo-min-framerate-desc-c
 				Container@ROW:
 					Width: PARENT_WIDTH - 24
 					Height: 50
@@ -129,13 +129,13 @@ Container@TURBO_PANEL:
 									Width: PARENT_WIDTH
 									Height: 20
 									Font: Tiny
-									Text: Draws at most this many frames per second whatever the
+									Text: label-turbo-force-framerate-desc-a
 								Label@FORCE_FRAMERATE_DESC_B:
 									Y: 15
 									Width: PARENT_WIDTH
 									Height: 20
 									Font: Tiny
-									Text: load, to try out what a low frame rate feels like (testing)
+									Text: label-turbo-force-framerate-desc-b
 				Background@BARS_SECTION_HEADER:
 					X: 5
 					Width: PARENT_WIDTH - 24 - 10
@@ -148,7 +148,7 @@ Container@TURBO_PANEL:
 							Height: PARENT_HEIGHT
 							Font: TinyBold
 							Align: Center
-							Text: Status bars
+							Text: label-turbo-bars-section
 				Container@ROW:
 					Width: PARENT_WIDTH - 24
 					Height: 50
@@ -160,7 +160,7 @@ Container@TURBO_PANEL:
 								Label@STATUS_BARS:
 									Width: PARENT_WIDTH
 									Height: 20
-									Text: Status bars
+									Text: label-turbo-status-bars
 								DropDownButton@STATUS_BAR_DROPDOWN:
 									Y: 25
 									Width: PARENT_WIDTH
@@ -174,19 +174,19 @@ Container@TURBO_PANEL:
 									Width: PARENT_WIDTH
 									Height: 20
 									Font: Tiny
-									Text: The same setting as on the Display page. Each bar drawn
+									Text: label-turbo-status-bars-desc-a
 								Label@STATUS_BAR_DESC_B:
 									Y: 15
 									Width: PARENT_WIDTH
 									Height: 20
 									Font: Tiny
-									Text: is a little work per unit per frame; with thousands of
+									Text: label-turbo-status-bars-desc-b
 								Label@STATUS_BAR_DESC_C:
 									Y: 30
 									Width: PARENT_WIDTH
 									Height: 20
 									Font: Tiny
-									Text: units in view the options below keep most of it away
+									Text: label-turbo-status-bars-desc-c
 				Container@ROW:
 					Width: PARENT_WIDTH - 24
 					Height: 20
@@ -199,7 +199,7 @@ Container@TURBO_PANEL:
 									Width: PARENT_WIDTH
 									Height: 20
 									Font: Regular
-									Text: Selected: health bar only when damaged
+									Text: checkbox-turbo-selected-bar-damaged
 						Container@DRAG_BOX_BARS_CHECKBOX_CONTAINER:
 							X: PARENT_WIDTH / 2 + 10
 							Width: PARENT_WIDTH / 2 - 20
@@ -208,7 +208,7 @@ Container@TURBO_PANEL:
 									Width: PARENT_WIDTH
 									Height: 20
 									Font: Regular
-									Text: Bars for units inside a selection box
+									Text: checkbox-turbo-drag-box-bars
 				Container@ROW:
 					Width: PARENT_WIDTH - 24
 					Height: 20
@@ -221,4 +221,4 @@ Container@TURBO_PANEL:
 									Width: PARENT_WIDTH
 									Height: 20
 									Font: Regular
-									Text: No automatic status bars on infantry
+									Text: checkbox-turbo-no-infantry-bars

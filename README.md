@@ -1,57 +1,60 @@
-# OpenRA
+# OpenRA Turbo
 
-A Libre/Free Real Time Strategy game engine supporting early Westwood classics.
+A faster client for OpenRA release-20250330. It simulates exactly the same game, so it plays on the usual servers with the usual clients, in the same games, with the same replays. In a big 8-player match it spends about 40% less time per tick in the late game and a third less over the whole game, and selecting hundreds of units no longer doubles the cost of a frame.
 
-* Website: [https://www.openra.net](https://www.openra.net)
-* Chat: [#openra on Libera](ircs://irc.libera.chat:6697/openra) ([web](https://web.libera.chat/#openra)) or [Discord](https://discord.openra.net) ![Discord Badge](https://discordapp.com/api/guilds/153649279762694144/widget.png)
-* Repository: [https://github.com/OpenRA/OpenRA](https://github.com/OpenRA/OpenRA) ![Continuous Integration](https://github.com/OpenRA/OpenRA/workflows/Continuous%20Integration/badge.svg)
+Nothing is sent anywhere, nothing changes on servers, and nothing about the rules changes: the work is in how the client gets to the same result. The main menu reads `release-20250330 (Turbo 1.0)` when it is installed.
 
-Please read the [FAQ](https://github.com/OpenRA/OpenRA/wiki/FAQ) in our [Wiki](https://github.com/OpenRA/OpenRA/wiki) and report problems at [https://github.com/OpenRA/OpenRA/issues](https://github.com/OpenRA/OpenRA/issues).
+## For players
 
-Join the [Forum](https://forum.openra.net/) for discussion.
+Installed, with nothing to set up:
 
-## Play
+- **Big games run faster.** Idle units no longer re-check all their neighbours for targets every few ticks, aircraft keep their distance from each other without looking at every unit below them, and things that only get drawn (standing animations, rank icons, GPS dots) stop doing work for the simulation.
+- **Big selections draw faster.** Selecting hundreds of units, or holding a drag box over them, used to double the time a frame took; now it adds little.
+- **The game keeps its speed on a slow computer.** When the simulation falls behind, frames are skipped until it has caught up (never below 20 frames per second), instead of the game slowing down for you and everyone waiting on you.
+- **Scrolling keeps its speed** at any frame rate; the standard client slows it down below 40 FPS.
+- **"Show when damaged" is free** on undamaged units, and the mouse pointer over a huge selection is chosen without asking every rifleman.
 
-Distributed mods include a reimagining of
+Optional, in *Settings > Turbo*:
 
-* Command & Conquer: Red Alert
-* Command & Conquer: Tiberian Dawn
-* Dune 2000
+- The frame rate below which frames are no longer skipped (default 20; 25 means never skip).
+- A forced low frame rate, to see what one feels like before you need to.
+- Three ways to draw fewer status bars when thousands of units are on the screen: health bars on selected units only while damaged, no bars inside a drag box, no automatic bars on infantry.
 
-EA has not endorsed and does not support this product.
+## Install (Windows)
 
-Check our [Playing the Game](https://github.com/OpenRA/OpenRA/wiki/Playing-the-game) Guide to win multiplayer matches.
+1. Close the game. Find the OpenRA install folder (with `RedAlert.exe` or `OpenRA.exe`; usually `C:\Program Files (x86)\OpenRA\` or `%LOCALAPPDATA%\Programs\OpenRA\`). It must be release-20250330.
+2. Keep a copy of the folder, or of the files the zip replaces, to go back.
+3. Copy the contents of the zip's `OpenRA` folder over the install folder, replacing files.
+4. Start the game. The main menu should say `release-20250330 (Turbo 1.0)`.
 
-## Contribute
+To go back, put the saved files back, or reinstall release-20250330. Linux and macOS installs cannot be patched in place; build from source (`make`), see TURBO.md.
 
-* Please read [INSTALL.md](https://github.com/OpenRA/OpenRA/blob/bleed/INSTALL.md) and [Compiling](https://github.com/OpenRA/OpenRA/wiki/Compiling) on how to set up an OpenRA development environment.
-* See [Hacking](https://github.com/OpenRA/OpenRA/wiki/Hacking) for a (now very outdated) overview of the engine.
-* Read and follow our [Code of Conduct](https://github.com/OpenRA/OpenRA/blob/bleed/CODE_OF_CONDUCT.md).
-* To get your patches merged, please adhere to the [Contributing](https://github.com/OpenRA/OpenRA/blob/bleed/CONTRIBUTING.md) guidelines.
+## For developers
 
-## Mapping
+Every simulation change is checked by replaying a game recorded from stock clients and matching its sync hashes tick for tick, so the results are identical by test, not by argument. Measurements, the proof runs and the tooling are in [TURBO.md](TURBO.md).
 
-* We offer a [Mapping](https://github.com/OpenRA/OpenRA/wiki/Mapping) Tutorial as you can change gameplay drastically with custom rules.
-* For scripted mission have a look at the [Lua API](https://docs.openra.net/en/latest/release/lua/).
-* If you want to share your maps with the community, upload them at the [OpenRA Resource Center](https://resource.openra.net).
+Simulation:
 
-## Modding
+- **Idle target scans** ask the actor map first. Each bin keeps, per owner, how many actors it holds and which could be disguised; a unit that attacks only enemies skips its scan when no bin in range holds anyone who could appear hostile, and when it does scan it walks only those actors, in the original order. Owner changes are covered across the one-tick window before the bins are updated.
+- **Scan candidates** are rejected by the cheap tests (relationship, target types) before the shroud lookups, with an actor's enabled target types cached between condition changes and no allocation per candidate.
+- **Aircraft repulsion** walks a per-bin list of aircraft rather than every actor under the flight path.
+- **Draw-only traits** do less per tick: still animations and hidden loops are not ticked (animations with a completion callback always are), rank decorations skip while still or hidden, GPS dots resolve visibility for the viewing player only, production bars compute on draw.
 
-* Download a copy of the [OpenRA Mod SDK](https://github.com/OpenRA/OpenRAModSDK) to start your own mod.
-* Check the [Modding Guide](https://github.com/OpenRA/OpenRA/wiki/Modding-Guide) to create your own classic RTS.
-* There exists an auto-generated [Trait documentation](https://docs.openra.net/en/latest/release/traits/) to get started with yaml files.
-* Some hints on how to create new OpenRA compatible [Pixelart](https://github.com/OpenRA/OpenRA/wiki/Pixelart).
-* Upload total conversions at [our Mod DB profile](https://www.moddb.com/games/openra/mods).
+Drawing:
 
-## Support
+- **Selection decorations** write their quads straight into the batch (brackets as eight lines, bars through a many-lines call), with the decoration bounds computed once per frame per actor instead of three times.
+- **Drag box** rollover is a set, not a list, and its contents are recomputed only when the mouse, modifiers or world tick change.
+- **Bars renderables** are made only for actors that have something to draw.
+- **The mouse pointer** over a selection: order lists built without LINQ and reused, the answer cached across frames of the same tick, and the basic infantry types (`e1`, `e3`, a setting) answered once per type.
+- **Frame skipping** in the game loop while the simulation is behind, down to `Graphics.MinFramerate`; `Debug.ForceFramerate` caps frames for testing.
+- **Scrolling** credits a frame with up to 100 ms of movement instead of 25, so it holds its speed at low frame rates; joystick scrolling becomes time-based for slow frames.
 
-* Sponsor a [mirror server](https://github.com/OpenRA/OpenRAWebsiteV3/tree/master/packages) if you have some bandwidth to spare.
-* You can immediately set up a [Dedicated](https://github.com/OpenRA/OpenRA/wiki/Dedicated-Server) Game Server.
+Tooling, all off unless asked for: a live bench that records real games tick by tick (`bench.cmd`), a replay bench with padded or ballasted ticks, a profiler that splits simulation time by trait, activity and actor type (`Bench.Profile=true`), and a headless settings-page check with screenshots (`Bench.Settings=<page>`).
 
-## License
-Copyright (c) OpenRA Developers and Contributors
-This file is part of OpenRA, which is free software. It is made
-available to you under the terms of the GNU General Public License
-as published by the Free Software Foundation, either version 3 of
-the License, or (at your option) any later version. For more
-information, see [COPYING](https://github.com/OpenRA/OpenRA/blob/bleed/COPYING).
+## Problems and limits
+
+- The one thing this client can do that the standard one cannot is drop *you* with "out of sync" while everyone else plays on. It has not happened in testing; if it does, please report it with the replay and the map.
+- Tested on Red Alert. Tiberian Dawn, Dune 2000 and Tiberian Sun run the same engine code but have not had a long game checked against stock clients.
+- The next OpenRA release will need the work ported again.
+
+Source: this branch (`turbo`) of [enfilade6500/OpenRA-ZeroLag](https://github.com/enfilade6500/OpenRA-ZeroLag). OpenRA's own README is [README-OpenRA.md](README-OpenRA.md); the license is OpenRA's (GPLv3).

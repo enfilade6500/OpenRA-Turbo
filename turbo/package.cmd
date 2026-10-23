@@ -1,6 +1,6 @@
 @echo off
 rem Assembles the Turbo release zip from this checkout after "make.cmd all": the three DLLs and the changed
-rem mod files, laid out as they go into an install, plus the player README.  Run from the checkout root.
+rem mod files, laid out as they go into an install, plus the README and TURBO.md.  Run from the checkout root.
 setlocal EnableExtensions
 set "VER=1.0"
 set "NAME=OpenRA-Turbo-%VER%-release-20250330"
@@ -18,7 +18,7 @@ copy /y mods\cnc\mod.yaml "%DIST%\mods\cnc\" >nul
 copy /y mods\cnc\chrome\settings.yaml "%DIST%\mods\cnc\chrome\" >nul
 copy /y mods\d2k\mod.yaml "%DIST%\mods\d2k\" >nul
 copy /y mods\ts\mod.yaml "%DIST%\mods\ts\" >nul
-copy /y turbo\README.txt "turbo-dist\%NAME%\" >nul
+copy /y README.md "turbo-dist\%NAME%\" >nul
 copy /y TURBO.md "turbo-dist\%NAME%\" >nul
 powershell -NoProfile -Command "Compress-Archive -Force -Path 'turbo-dist\%NAME%\*' -DestinationPath 'turbo-dist\%NAME%.zip'"
 powershell -NoProfile -Command "Get-FileHash -Algorithm SHA256 'turbo-dist\%NAME%\OpenRA\*.dll' | ForEach-Object { $_.Hash.ToLower() + '  ' + (Split-Path $_.Path -Leaf) }" > "turbo-dist\%NAME%.sha256.txt"

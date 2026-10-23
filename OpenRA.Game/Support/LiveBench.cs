@@ -49,7 +49,9 @@ namespace OpenRA.Support
 	///   Bench.Profile=true     also write &lt;name&gt;-profile.csv: simulation time per trait, activity, actor type, effect and
 	///                          idle-notification trait, every 250 ticks (one tick in ten is attributed)
 	///   Bench.Settings=true    smoke test: at the main menu, open the settings dialog (which builds every settings page and
-	///                          runs their logic), close it and exit; an error in a page's layout or logic shows up here
+	///                          runs their logic), close it and exit; an error in a page's layout or logic shows up here.
+	///                          Bench.Settings=&lt;PANEL_ID&gt; (e.g. TURBO_PANEL) opens that page instead, leaves it on the screen
+	///                          for a second, saves a screenshot (the usual Screenshots folder) and exits
 	///   Bench.Live=true        record real games instead: play normally, and every multiplayer or skirmish game played in this
 	///                          session is written to Bench.Out as live-&lt;time&gt;-&lt;map&gt;.csv/.json with a line in summary.txt.
 	///                          No warp, no padding, no camera; the other Bench.* options are ignored. Per tick this adds the
@@ -73,6 +75,8 @@ namespace OpenRA.Support
 		static bool selectAll, dragOverUnits, cameraOnUnits;
 		static bool selectZoomApplied;
 		static bool settingsTest, settingsTested;
+		static string settingsPage;
+		static int settingsExitTick;
 		static WPos mapCentre;
 
 		static readonly Stopwatch Clock = Stopwatch.StartNew();
@@ -141,7 +145,9 @@ namespace OpenRA.Support
 			zoom = zoomToMap ? 0 : Parse(zoomArg);
 			timestepOverride = (int)Parse(args.GetValue("Bench.Timestep", "0"));
 			replayPath = args.GetValue("Launch.Replay", "");
-			settingsTest = args.GetValue("Bench.Settings", "false").Equals("true", StringComparison.OrdinalIgnoreCase);
+			var settingsArg = args.GetValue("Bench.Settings", "false");
+			settingsTest = !settingsArg.Equals("false", StringComparison.OrdinalIgnoreCase);
+			settingsPage = settingsArg.Equals("true", StringComparison.OrdinalIgnoreCase) ? null : settingsArg;
 			var selectArg = args.GetValue("Bench.Select", "");
 			selectAll = selectArg.Equals("all", StringComparison.OrdinalIgnoreCase);
 			dragOverUnits = selectArg.Equals("drag", StringComparison.OrdinalIgnoreCase);
@@ -224,9 +230,21 @@ namespace OpenRA.Support
 					try
 					{
 						var panel = Ui.OpenWindow("SETTINGS_PANEL", new WidgetArgs { { "onExit", () => { } }, { "worldRenderer", wr } });
-						var tabs = panel.Get("SETTINGS_TAB_CONTAINER").Children.Count;
+						var tabs = panel.Get("SETTINGS_TAB_CONTAINER").Children;
+						if (settingsPage != null)
+						{
+							// Switch to the page and leave it up long enough to be drawn and photographed
+							foreach (var tab in tabs)
+								if (tab.Id == settingsPage)
+									(tab.GetType().GetField("OnClick")?.GetValue(tab) as Action)?.Invoke();
+
+							settingsExitTick = world.WorldTick + 100;
+							Console.WriteLine($"LiveBench: settings page {settingsPage} opened");
+							return;
+						}
+
 						Ui.CloseWindow();
-						Console.WriteLine($"LiveBench: settings dialog opened and closed, {tabs} pages");
+						Console.WriteLine($"LiveBench: settings dialog opened and closed, {tabs.Count} pages");
 					}
 					catch (Exception e)
 					{
@@ -234,6 +252,14 @@ namespace OpenRA.Support
 					}
 
 					Game.Exit();
+				}
+				else if (settingsTested && settingsExitTick > 0 && world != null)
+				{
+					// The screenshot is written on another thread; leave time for it before exiting
+					if (world.WorldTick == settingsExitTick - 50)
+						Game.TakeScreenshot();
+					else if (world.WorldTick >= settingsExitTick)
+						Game.Exit();
 				}
 
 				return;

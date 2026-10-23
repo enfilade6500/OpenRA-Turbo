@@ -210,5 +210,7 @@ run in place as well, like any OpenRA checkout.
 - The settings labels are plain English, not translation keys.
 - `bench.cmd Bench.Settings=true` opens and closes the settings dialog headlessly at the menu, which
   builds every settings page; it is the check that a layout change has not broken one.
+  `Bench.Settings=TURBO_PANEL` (any page id) opens that page instead and saves a screenshot of it
+  to the usual Screenshots folder before exiting, which is the check that it also looks right.
 - "No automatic status bars on infantry" goes by the `Infantry` target type, which the official
   mods all use; a mod that names its infantry differently gets no effect from it.

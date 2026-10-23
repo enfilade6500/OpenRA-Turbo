@@ -53,6 +53,9 @@ namespace OpenRA.Mods.Common.Widgets.Logic
 			SettingsUtils.BindCheckboxPref(panel, "DRAG_BOX_BARS_CHECKBOX", gs, "DragBoxStatusBars");
 			SettingsUtils.BindCheckboxPref(panel, "NO_INFANTRY_BARS_CHECKBOX", gs, "NoAutomaticStatusBarsOnInfantry");
 
+			// Lays the rows out (they are added before their sizes are known)
+			SettingsUtils.AdjustSettingsScrollPanelLayout(panel.Get<ScrollPanelWidget>("SETTINGS_SCROLLPANEL"));
+
 			return () => false;
 		}
 

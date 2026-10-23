@@ -1,10 +1,12 @@
-# Client performance branch
+# OpenRA Turbo
 
-A set of client-side changes to OpenRA release-20250330 that make big games run faster on the
-player's own computer. None of them changes what the game simulates: a player running this
-client plays in the same games, on the same servers, as players running the stock release, and
-the stock release's multiplayer version check passes. This branch is based directly on the
-release and contains nothing of the ZeroLag server work.
+A faster client for OpenRA release-20250330: a set of client-side changes that make big games run
+faster on the player's own computer. None of them changes what the game simulates: a player
+running Turbo plays in the same games, on the same servers, as players running the stock
+release, and the stock release's multiplayer version check passes. The main menu shows
+`release-20250330 (Turbo 1.0)`; the mod version servers see is the release's. The branch is based
+directly on the release and contains nothing of the ZeroLag server work. The knobs it adds are on
+a *Turbo* page in the settings.
 
 ## What it does
 
@@ -87,7 +89,7 @@ to the 1.2 ms it costs with no box at all. On a real machine, a box held over 4,
 tick before, 28 after, against 20 with no box; the 8 ms left is the bars themselves. The search was
 quadratic, so the bigger the game, the more it mattered.
 
-**Three status-bar options**, in *Settings > Display* under the status bars dropdown, for players who
+**Three status-bar options**, in *Settings > Turbo* under the status bars dropdown, for players who
 would rather not pay for bars that tell them nothing (each is a few microseconds per unit per
 frame, which is nothing for twenty units and a frame-doubling for four thousand):
 "Selected: health bar only when damaged" (`Game.SelectedHealthBarOnlyWhenDamaged`) leaves the
@@ -104,10 +106,19 @@ simulation tick, late or not; on a slow computer that frame is time taken from t
 player falls behind. Now, when a tick finishes after the next one was already due, the frame is
 skipped and the simulation goes straight on until it has caught up, never falling below a minimum
 frame rate so the screen keeps moving. Nothing changes while the computer keeps up.
-*Settings > Display*: "Catching up: skip frames down to N FPS" (`Graphics.MinFramerate`,
-default 15; 25 never skips at normal game speed). *Settings > Advanced*, developer section:
-"Force a low frame rate" (`Debug.ForceFramerate`, 0 = off) draws at most that many frames per
-second whatever the load, to try out what a low frame rate feels like.
+*Settings > Turbo*: "Catching up: skip frames down to N FPS" (`Graphics.MinFramerate`, default
+20; 25 never skips at normal game speed) and, for testing, "Force a low frame rate"
+(`Debug.ForceFramerate`, 0 = off), which draws at most that many frames per second whatever the
+load, to try out what a low frame rate feels like.
+
+**Scrolling keeps its speed at any frame rate.** Edge and keyboard scrolling move the view once
+per frame by an amount meant to follow the time since the last frame, but stock credited a frame
+with at most 25 ms, so below 40 frames per second scrolling slowed down (at 15 it crawled at a
+third of its speed) — and that is exactly where frame skipping puts a slow computer. The credit is
+now capped at 100 ms, enough for any frame rate the skipping allows, and the clock runs between
+scrolls so the first frame of a scroll is credited with a frame, not with the cap. Joystick
+scrolling (the mouse-scroll mode) was not time-based at all; it now credits frames longer than one
+sixtieth of a second with their length, and is otherwise what it was.
 
 ## Measurements
 
@@ -180,8 +191,12 @@ Then copy, from the build output into an installed release-20250330:
     OpenRA.Game.dll
     OpenRA.Mods.Common.dll
     OpenRA.Mods.Cnc.dll
+    mods/common/chrome/settings.yaml
     mods/common/chrome/settings-display.yaml
     mods/common/chrome/settings-advanced.yaml
+    mods/common/chrome/settings-turbo.yaml
+    mods/<mod>/mod.yaml            (lists the new settings page; ra, cnc, d2k and ts each)
+    mods/cnc/chrome/settings.yaml  (Tiberian Dawn has its own)
 
 over the files of the same name (keep copies of the originals to go back). The whole build can be
 run in place as well, like any OpenRA checkout.
@@ -193,5 +208,7 @@ run in place as well, like any OpenRA checkout.
 - Hidden looping animations resume from where they stopped rather than from where they would
   have been. Nobody can tell, but it is a visible difference from stock in principle.
 - The settings labels are plain English, not translation keys.
+- `bench.cmd Bench.Settings=true` opens and closes the settings dialog headlessly at the menu, which
+  builds every settings page; it is the check that a layout change has not broken one.
 - "No automatic status bars on infantry" goes by the `Infantry` target type, which the official
   mods all use; a mod that names its infantry differently gets no effect from it.

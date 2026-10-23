@@ -57,3 +57,6 @@ update.log
 
 # Live bench recordings (bench.cmd)
 /results/
+
+# Turbo release zips (turbo/package.cmd)
+/turbo-dist/

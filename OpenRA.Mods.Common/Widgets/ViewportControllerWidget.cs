@@ -178,13 +178,25 @@ namespace OpenRA.Mods.Common.Widgets
 			tooltipContainer.Value.RemoveTooltip();
 		}
 
+		// Scrolling happens once per frame, so its speed must follow the time between frames to stay the same at any
+		// frame rate. The time a frame is credited with is capped: after a hitch (or a frame skipped because the
+		// simulation was behind) the view catches up by at most this much, rather than leaping.
+		const float MaxScrollDeltaMs = 100f;
 		long lastScrollTime = 0;
+
 		public override void Draw()
 		{
+			// Since the last frame, capped; the clock runs whether or not scrolling happened, so the first frame of a
+			// scroll is credited with one frame's time rather than with the cap
+			var deltaMs = Math.Min(Game.RunTime - lastScrollTime, MaxScrollDeltaMs);
+			lastScrollTime = Game.RunTime;
+
 			if (IsJoystickScrolling)
 			{
-				// Base the JoystickScrolling speed on the Scroll Speed slider
-				var rate = 0.01f * Game.Settings.Game.ViewportEdgeScrollStep;
+				// Base the JoystickScrolling speed on the Scroll Speed slider. The per-frame rate is the one the game
+				// always had at 60 frames per second; frames longer than that are credited with their length, so a
+				// slow or skipped frame does not slow the scroll.
+				var rate = 0.01f * Game.Settings.Game.ViewportEdgeScrollStep * Math.Max(1f, deltaMs / (1000f / 60));
 
 				var scroll = (joystickScrollEnd.Value - joystickScrollStart.Value).ToFloat2() * rate;
 				worldRenderer.Viewport.Scroll(scroll, false);
@@ -206,14 +218,12 @@ namespace OpenRA.Mods.Common.Widgets
 						if (keyboardDirections.Includes(kv.Key) || edgeDirections.Includes(kv.Key))
 							scroll += kv.Value;
 
-					// Scroll rate is defined for a 40ms interval
-					var deltaScale = Math.Min(Game.RunTime - lastScrollTime, 25f);
-
+					// Scroll rate is defined for a 25ms interval. (The game capped a frame's credit at 25ms, which made
+					// scrolling slow down below 40 frames per second; the cap is now MaxScrollDeltaMs.)
 					var length = Math.Max(1, scroll.Length);
-					scroll *= deltaScale / (25 * length) * Game.Settings.Game.ViewportEdgeScrollStep;
+					scroll *= deltaMs / (25 * length) * Game.Settings.Game.ViewportEdgeScrollStep;
 
 					worldRenderer.Viewport.Scroll(scroll, false);
-					lastScrollTime = Game.RunTime;
 				}
 			}
 

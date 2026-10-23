@@ -1,6 +1,6 @@
 # OpenRA Turbo
 
-OpenRA Turbo is a fork of the standard OpenRA release client with only a few small tweaks to let it run faster with many units on the map. It is a drop-in replacement: the same game, the same servers, the same players and replays, nothing sent anywhere and nothing changed on the server side. With several hundreds or thousands of units in a game, it can save roughly 40% of the time per tick, give or take depending on conditions.
+OpenRA Turbo is a minimal modification of the standard OpenRA release client consisting of a few small tweaks to let it run faster with many units on the map. It is a fully compatible drop-in replacement. As a rough estimate, with several hundreds or thousands of units in a game, it can save 40% of the time per tick, give or take depending on conditions.
 
 ## Features
 
@@ -14,7 +14,7 @@ Under the hood:
 Defaults and options, in *Settings > Turbo*:
 
 - **Frame skipping.** When the simulation falls behind, frames are skipped until it has caught up, so the game keeps its speed instead of slowing down for you and everyone waiting on you. By default it never goes below 20 frames per second; the slider sets that floor (25 means never skip).
-- A forced low frame rate, to see what one feels like before you need to.
+- A forced low frame rate option, to help the player test and calibrate the frame rate minimum.
 - Three ways to draw fewer status bars when thousands of units are on the screen: health bars on selected units only while damaged, no bars inside a drag box, no automatic bars on infantry.
 
 ## Install (Windows)

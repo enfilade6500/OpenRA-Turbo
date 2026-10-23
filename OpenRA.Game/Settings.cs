@@ -211,7 +211,7 @@ namespace OpenRA
 
 		[Desc("When the simulation runs slower than the game's tick rate, frames are skipped so that it can catch up, " +
 			"but never below this many per second. At the tick rate (25 at normal speed) or above, no frame is skipped.")]
-		public int MinFramerate = 15;
+		public int MinFramerate = 20;
 
 		[Desc("Disable the OpenGL debug message callback feature.")]
 		public bool DisableGLDebugMessageCallback = false;

@@ -55,19 +55,12 @@ namespace OpenRA.Mods.Common.Widgets.Logic
 			SettingsUtils.BindCheckboxPref(panel, "CHECKUNSYNCED_CHECKBOX", ds, "SyncCheckUnsyncedCode");
 			SettingsUtils.BindCheckboxPref(panel, "CHECKBOTSYNC_CHECKBOX", ds, "SyncCheckBotModuleCode");
 			SettingsUtils.BindCheckboxPref(panel, "PERFLOGGING_CHECKBOX", ds, "EnableSimulationPerfLogging");
-			SettingsUtils.BindIntSliderPref(panel, "FORCE_FRAMERATE_SLIDER", ds, "ForceFramerate");
-			panel.Get<LabelWidget>("FORCE_FRAMERATE_LABEL").GetText = () => ds.ForceFramerate > 0
-				? $"Force a low frame rate: {ds.ForceFramerate} FPS"
-				: "Force a low frame rate: off";
-
 			panel.Get("BOTDEBUG_CHECKBOX_CONTAINER").IsVisible = () => ds.DisplayDeveloperSettings;
 			panel.Get("CHECKUNSYNCED_CHECKBOX_CONTAINER").IsVisible = () => ds.DisplayDeveloperSettings;
 			panel.Get("CHECKBOTSYNC_CHECKBOX_CONTAINER").IsVisible = () => ds.DisplayDeveloperSettings;
 			panel.Get("LUADEBUG_CHECKBOX_CONTAINER").IsVisible = () => ds.DisplayDeveloperSettings;
 			panel.Get("REPLAY_COMMANDS_CHECKBOX_CONTAINER").IsVisible = () => ds.DisplayDeveloperSettings;
 			panel.Get("PERFLOGGING_CHECKBOX_CONTAINER").IsVisible = () => ds.DisplayDeveloperSettings;
-			panel.Get("FORCE_FRAMERATE_CONTAINER").IsVisible = () => ds.DisplayDeveloperSettings;
-			panel.Get("FORCE_FRAMERATE_DESC_CONTAINER").IsVisible = () => ds.DisplayDeveloperSettings;
 			panel.Get("DEBUG_HIDDEN_CONTAINER").IsVisible = () => !ds.DisplayDeveloperSettings;
 
 			SettingsUtils.AdjustSettingsScrollPanelLayout(scrollPanel);
@@ -94,7 +87,6 @@ namespace OpenRA.Mods.Common.Widgets.Logic
 				ds.SendSystemInformation = dds.SendSystemInformation;
 				ds.CheckVersion = dds.CheckVersion;
 				ds.EnableDebugCommandsInReplays = dds.EnableDebugCommandsInReplays;
-				ds.ForceFramerate = dds.ForceFramerate;
 				ds.EnableSimulationPerfLogging = dds.EnableSimulationPerfLogging;
 			};
 		}

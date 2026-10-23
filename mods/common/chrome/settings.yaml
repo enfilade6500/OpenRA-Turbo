@@ -3,6 +3,7 @@ Background@SETTINGS_PANEL:
 		ButtonStride: 0, 35
 		Panels:
 			DISPLAY_PANEL: Display
+			TURBO_PANEL: Turbo
 			AUDIO_PANEL: Audio
 			INPUT_PANEL: Input
 			HOTKEYS_PANEL: Hotkeys

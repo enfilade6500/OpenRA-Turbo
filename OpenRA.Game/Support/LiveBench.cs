@@ -19,6 +19,7 @@ using System.Text;
 using System.Threading;
 using OpenRA.Graphics;
 using OpenRA.Network;
+using OpenRA.Widgets;
 
 namespace OpenRA.Support
 {
@@ -47,6 +48,8 @@ namespace OpenRA.Support
 	///                          Bench.Select=drag holds a drag box over them instead (the rollover, every tick)
 	///   Bench.Profile=true     also write &lt;name&gt;-profile.csv: simulation time per trait, activity, actor type, effect and
 	///                          idle-notification trait, every 250 ticks (one tick in ten is attributed)
+	///   Bench.Settings=true    smoke test: at the main menu, open the settings dialog (which builds every settings page and
+	///                          runs their logic), close it and exit; an error in a page's layout or logic shows up here
 	///   Bench.Live=true        record real games instead: play normally, and every multiplayer or skirmish game played in this
 	///                          session is written to Bench.Out as live-&lt;time&gt;-&lt;map&gt;.csv/.json with a line in summary.txt.
 	///                          No warp, no padding, no camera; the other Bench.* options are ignored. Per tick this adds the
@@ -69,6 +72,7 @@ namespace OpenRA.Support
 		static bool zoomToMap;
 		static bool selectAll, dragOverUnits, cameraOnUnits;
 		static bool selectZoomApplied;
+		static bool settingsTest, settingsTested;
 		static WPos mapCentre;
 
 		static readonly Stopwatch Clock = Stopwatch.StartNew();
@@ -137,6 +141,7 @@ namespace OpenRA.Support
 			zoom = zoomToMap ? 0 : Parse(zoomArg);
 			timestepOverride = (int)Parse(args.GetValue("Bench.Timestep", "0"));
 			replayPath = args.GetValue("Launch.Replay", "");
+			settingsTest = args.GetValue("Bench.Settings", "false").Equals("true", StringComparison.OrdinalIgnoreCase);
 			var selectArg = args.GetValue("Bench.Select", "");
 			selectAll = selectArg.Equals("all", StringComparison.OrdinalIgnoreCase);
 			dragOverUnits = selectArg.Equals("drag", StringComparison.OrdinalIgnoreCase);
@@ -210,6 +215,29 @@ namespace OpenRA.Support
 		{
 			if (!Active || finished)
 				return;
+
+			if (settingsTest)
+			{
+				if (!settingsTested && world != null && world.Type == WorldType.Shellmap && wr != null && world.WorldTick > 5)
+				{
+					settingsTested = true;
+					try
+					{
+						var panel = Ui.OpenWindow("SETTINGS_PANEL", new WidgetArgs { { "onExit", () => { } }, { "worldRenderer", wr } });
+						var tabs = panel.Get("SETTINGS_TAB_CONTAINER").Children.Count;
+						Ui.CloseWindow();
+						Console.WriteLine($"LiveBench: settings dialog opened and closed, {tabs} pages");
+					}
+					catch (Exception e)
+					{
+						Console.WriteLine($"LiveBench: settings dialog FAILED: {e}");
+					}
+
+					Game.Exit();
+				}
+
+				return;
+			}
 
 			if (Live)
 			{

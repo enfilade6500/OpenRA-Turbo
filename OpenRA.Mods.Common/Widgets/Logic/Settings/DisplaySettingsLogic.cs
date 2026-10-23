@@ -148,11 +148,7 @@ namespace OpenRA.Mods.Common.Widgets.Logic
 			SettingsUtils.BindCheckboxPref(panel, "FRAME_LIMIT_CHECKBOX", ds, "CapFramerate");
 			SettingsUtils.BindCheckboxPref(panel, "FRAME_LIMIT_GAMESPEED_CHECKBOX", ds, "CapFramerateToGameFps");
 			SettingsUtils.BindIntSliderPref(panel, "FRAME_LIMIT_SLIDER", ds, "MaxFramerate");
-			SettingsUtils.BindIntSliderPref(panel, "MIN_FRAMERATE_SLIDER", ds, "MinFramerate");
 			SettingsUtils.BindCheckboxPref(panel, "PLAYER_STANCE_COLORS_CHECKBOX", gs, "UsePlayerStanceColors");
-			SettingsUtils.BindCheckboxPref(panel, "SELECTED_BAR_DAMAGED_CHECKBOX", gs, "SelectedHealthBarOnlyWhenDamaged");
-			SettingsUtils.BindCheckboxPref(panel, "DRAG_BOX_BARS_CHECKBOX", gs, "DragBoxStatusBars");
-			SettingsUtils.BindCheckboxPref(panel, "NO_INFANTRY_BARS_CHECKBOX", gs, "NoAutomaticStatusBarsOnInfantry");
 
 			var cb = panel.Get<CheckboxWidget>("PLAYER_STANCE_COLORS_CHECKBOX");
 			cb.IsChecked = () => gs.UsePlayerStanceColors;
@@ -252,12 +248,6 @@ namespace OpenRA.Mods.Common.Widgets.Logic
 
 			panel.Get<SliderWidget>("FRAME_LIMIT_SLIDER").IsDisabled = () => !frameLimitCheckbox.IsChecked() || frameLimitGamespeedCheckbox.IsChecked();
 
-			// Frames skipped while the simulation is behind, down to this rate (not translated: a client-side experiment)
-			var minFramerateLabel = panel.Get<LabelWidget>("MIN_FRAMERATE_LABEL");
-			minFramerateLabel.GetText = () => ds.MinFramerate >= 25
-				? "Catching up: never skip frames"
-				: $"Catching up: skip frames down to {ds.MinFramerate} FPS";
-
 			// Player profile
 			var ps = Game.Settings.Player;
 
@@ -333,7 +323,6 @@ namespace OpenRA.Mods.Common.Widgets.Logic
 				ds.CapFramerate = dds.CapFramerate;
 				ds.MaxFramerate = dds.MaxFramerate;
 				ds.CapFramerateToGameFps = dds.CapFramerateToGameFps;
-				ds.MinFramerate = dds.MinFramerate;
 				ds.GLProfile = dds.GLProfile;
 				ds.Mode = dds.Mode;
 				ds.VideoDisplay = dds.VideoDisplay;
@@ -354,9 +343,6 @@ namespace OpenRA.Mods.Common.Widgets.Logic
 				ps.Name = dps.Name;
 
 				gs.TextNotificationPoolFilters = dgs.TextNotificationPoolFilters;
-				gs.SelectedHealthBarOnlyWhenDamaged = dgs.SelectedHealthBarOnlyWhenDamaged;
-				gs.DragBoxStatusBars = dgs.DragBoxStatusBars;
-				gs.NoAutomaticStatusBarsOnInfantry = dgs.NoAutomaticStatusBarsOnInfantry;
 			};
 		}
 
@@ -409,7 +395,16 @@ namespace OpenRA.Mods.Common.Widgets.Logic
 			}
 		}
 
-		static void ShowStatusBarsDropdown(DropDownButtonWidget dropdown, GameSettings s)
+		internal static string StatusBarsLabel(StatusBarsType statusBars)
+		{
+			return statusBars == StatusBarsType.Standard
+				? FluentProvider.GetMessage(Standard)
+				: statusBars == StatusBarsType.DamageShow
+					? FluentProvider.GetMessage(ShowOnDamage)
+					: FluentProvider.GetMessage(AlwaysShow);
+		}
+
+		internal static void ShowStatusBarsDropdown(DropDownButtonWidget dropdown, GameSettings s)
 		{
 			var options = new Dictionary<string, StatusBarsType>()
 			{

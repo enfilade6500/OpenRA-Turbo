@@ -1,0 +1,224 @@
+Container@TURBO_PANEL:
+	Logic: TurboSettingsLogic
+	Width: PARENT_WIDTH
+	Height: PARENT_HEIGHT
+	Children:
+		ScrollPanel@SETTINGS_SCROLLPANEL:
+			Width: PARENT_WIDTH
+			Height: PARENT_HEIGHT
+			CollapseHiddenChildren: True
+			TopBottomSpacing: 5
+			ItemSpacing: 10
+			Children:
+				Background@TURBO_SECTION_HEADER:
+					X: 5
+					Width: PARENT_WIDTH - 24 - 10
+					Height: 13
+					Background: separator
+					ClickThrough: True
+					Children:
+						Label@TURBO_TITLE:
+							Width: PARENT_WIDTH
+							Height: PARENT_HEIGHT
+							Font: TinyBold
+							Align: Center
+				Container@ROW:
+					Width: PARENT_WIDTH - 24
+					Height: 50
+					Children:
+						Container@TURBO_DESC_CONTAINER:
+							X: 10
+							Width: PARENT_WIDTH - 20
+							Children:
+								Label@TURBO_DESC_A:
+									Width: PARENT_WIDTH
+									Height: 20
+									Font: Tiny
+									Text: A faster client for this release. The game it simulates is the same one, so it plays on the usual
+								Label@TURBO_DESC_B:
+									Y: 15
+									Width: PARENT_WIDTH
+									Height: 20
+									Font: Tiny
+									Text: servers with the usual clients. Everything on this page affects this computer only. Big games are
+								Label@TURBO_DESC_C:
+									Y: 30
+									Width: PARENT_WIDTH
+									Height: 20
+									Font: Tiny
+									Text: faster without touching anything here; the settings below are for when frames are what is short.
+				Background@FRAMES_SECTION_HEADER:
+					X: 5
+					Width: PARENT_WIDTH - 24 - 10
+					Height: 13
+					Background: separator
+					ClickThrough: True
+					Children:
+						Label@LABEL:
+							Width: PARENT_WIDTH
+							Height: PARENT_HEIGHT
+							Font: TinyBold
+							Align: Center
+							Text: Frames
+				Container@ROW:
+					Width: PARENT_WIDTH - 24
+					Height: 50
+					Children:
+						Container@MIN_FRAMERATE_CONTAINER:
+							X: 10
+							Width: PARENT_WIDTH / 2 - 20
+							Children:
+								Label@MIN_FRAMERATE_LABEL:
+									Width: PARENT_WIDTH
+									Height: 20
+									Font: Regular
+								Slider@MIN_FRAMERATE_SLIDER:
+									X: 20
+									Y: 25
+									Width: PARENT_WIDTH - 20
+									Height: 20
+									Ticks: 5
+									MinimumValue: 5
+									MaximumValue: 25
+						Container@MIN_FRAMERATE_DESC_CONTAINER:
+							X: PARENT_WIDTH / 2 + 10
+							Width: PARENT_WIDTH / 2 - 20
+							Children:
+								Label@MIN_FRAMERATE_DESC_A:
+									Width: PARENT_WIDTH
+									Height: 20
+									Font: Tiny
+									Text: When your computer cannot keep up with the game, frames
+								Label@MIN_FRAMERATE_DESC_B:
+									Y: 15
+									Width: PARENT_WIDTH
+									Height: 20
+									Font: Tiny
+									Text: are skipped so the game runs at full speed, never below this
+								Label@MIN_FRAMERATE_DESC_C:
+									Y: 30
+									Width: PARENT_WIDTH
+									Height: 20
+									Font: Tiny
+									Text: rate (scrolling keeps its speed whatever the frame rate)
+				Container@ROW:
+					Width: PARENT_WIDTH - 24
+					Height: 50
+					Children:
+						Container@FORCE_FRAMERATE_CONTAINER:
+							X: 10
+							Width: PARENT_WIDTH / 2 - 20
+							Children:
+								Label@FORCE_FRAMERATE_LABEL:
+									Width: PARENT_WIDTH
+									Height: 20
+									Font: Regular
+								Slider@FORCE_FRAMERATE_SLIDER:
+									X: 20
+									Y: 25
+									Width: PARENT_WIDTH - 20
+									Height: 20
+									Ticks: 7
+									MinimumValue: 0
+									MaximumValue: 30
+						Container@FORCE_FRAMERATE_DESC_CONTAINER:
+							X: PARENT_WIDTH / 2 + 10
+							Width: PARENT_WIDTH / 2 - 20
+							Children:
+								Label@FORCE_FRAMERATE_DESC_A:
+									Width: PARENT_WIDTH
+									Height: 20
+									Font: Tiny
+									Text: Draws at most this many frames per second whatever the
+								Label@FORCE_FRAMERATE_DESC_B:
+									Y: 15
+									Width: PARENT_WIDTH
+									Height: 20
+									Font: Tiny
+									Text: load, to try out what a low frame rate feels like (testing)
+				Background@BARS_SECTION_HEADER:
+					X: 5
+					Width: PARENT_WIDTH - 24 - 10
+					Height: 13
+					Background: separator
+					ClickThrough: True
+					Children:
+						Label@LABEL:
+							Width: PARENT_WIDTH
+							Height: PARENT_HEIGHT
+							Font: TinyBold
+							Align: Center
+							Text: Status bars
+				Container@ROW:
+					Width: PARENT_WIDTH - 24
+					Height: 50
+					Children:
+						Container@STATUS_BAR_DROPDOWN_CONTAINER:
+							X: 10
+							Width: PARENT_WIDTH / 2 - 20
+							Children:
+								Label@STATUS_BARS:
+									Width: PARENT_WIDTH
+									Height: 20
+									Text: Status bars
+								DropDownButton@STATUS_BAR_DROPDOWN:
+									Y: 25
+									Width: PARENT_WIDTH
+									Height: 25
+									Font: Regular
+						Container@STATUS_BAR_DESC_CONTAINER:
+							X: PARENT_WIDTH / 2 + 10
+							Width: PARENT_WIDTH / 2 - 20
+							Children:
+								Label@STATUS_BAR_DESC_A:
+									Width: PARENT_WIDTH
+									Height: 20
+									Font: Tiny
+									Text: The same setting as on the Display page. Each bar drawn
+								Label@STATUS_BAR_DESC_B:
+									Y: 15
+									Width: PARENT_WIDTH
+									Height: 20
+									Font: Tiny
+									Text: is a little work per unit per frame; with thousands of
+								Label@STATUS_BAR_DESC_C:
+									Y: 30
+									Width: PARENT_WIDTH
+									Height: 20
+									Font: Tiny
+									Text: units in view the options below keep most of it away
+				Container@ROW:
+					Width: PARENT_WIDTH - 24
+					Height: 20
+					Children:
+						Container@SELECTED_BAR_DAMAGED_CHECKBOX_CONTAINER:
+							X: 10
+							Width: PARENT_WIDTH / 2 - 20
+							Children:
+								Checkbox@SELECTED_BAR_DAMAGED_CHECKBOX:
+									Width: PARENT_WIDTH
+									Height: 20
+									Font: Regular
+									Text: Selected: health bar only when damaged
+						Container@DRAG_BOX_BARS_CHECKBOX_CONTAINER:
+							X: PARENT_WIDTH / 2 + 10
+							Width: PARENT_WIDTH / 2 - 20
+							Children:
+								Checkbox@DRAG_BOX_BARS_CHECKBOX:
+									Width: PARENT_WIDTH
+									Height: 20
+									Font: Regular
+									Text: Bars for units inside a selection box
+				Container@ROW:
+					Width: PARENT_WIDTH - 24
+					Height: 20
+					Children:
+						Container@NO_INFANTRY_BARS_CHECKBOX_CONTAINER:
+							X: 10
+							Width: PARENT_WIDTH / 2 - 20
+							Children:
+								Checkbox@NO_INFANTRY_BARS_CHECKBOX:
+									Width: PARENT_WIDTH
+									Height: 20
+									Font: Regular
+									Text: No automatic status bars on infantry

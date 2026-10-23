@@ -195,38 +195,3 @@ Container@ADVANCED_PANEL:
 									Height: 20
 									Font: Regular
 									Text: checkbox-perflogging-container
-				Container@ROW:
-					Width: PARENT_WIDTH - 24
-					Height: 50
-					Children:
-						Container@FORCE_FRAMERATE_CONTAINER:
-							X: 10
-							Width: PARENT_WIDTH / 2 - 20
-							Children:
-								Label@FORCE_FRAMERATE_LABEL:
-									Width: PARENT_WIDTH
-									Height: 20
-									Font: Regular
-								Slider@FORCE_FRAMERATE_SLIDER:
-									X: 20
-									Y: 25
-									Width: PARENT_WIDTH - 20
-									Height: 20
-									Ticks: 7
-									MinimumValue: 0
-									MaximumValue: 30
-						Container@FORCE_FRAMERATE_DESC_CONTAINER:
-							X: PARENT_WIDTH / 2 + 10
-							Width: PARENT_WIDTH / 2 - 20
-							Children:
-								Label@FORCE_FRAMERATE_DESC_A:
-									Width: PARENT_WIDTH
-									Height: 20
-									Font: Tiny
-									Text: Draws at most this many frames per second whatever
-								Label@FORCE_FRAMERATE_DESC_B:
-									Y: 15
-									Width: PARENT_WIDTH
-									Height: 20
-									Font: Tiny
-									Text: the load, to try out what a low frame rate feels like

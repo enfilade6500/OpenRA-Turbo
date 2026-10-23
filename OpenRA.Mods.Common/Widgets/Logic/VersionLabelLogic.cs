@@ -18,7 +18,8 @@ namespace OpenRA.Mods.Common.Widgets.Logic
 		[ObjectCreator.UseCtor]
 		public VersionLabelLogic(LabelWidget widget, ModData modData)
 		{
-			var versionText = modData.Manifest.Metadata.Version;
+			// The mod version is what servers check and is the release's; the Turbo label says which client this is
+			var versionText = $"{modData.Manifest.Metadata.Version} ({Turbo.Label})";
 			widget.GetText = () => versionText;
 		}
 	}

@@ -207,9 +207,9 @@ run in place as well, like any OpenRA checkout.
 Checked on 2026-10-24 against upstream's `bleed` branch (at dbe6747333, 2026-10-15; about 600
 commits since release-20250330) and the heads of its ~680 most recent pull requests (#21700 and
 up, merged or not), file by file for everything Turbo touches and by title for the rest; and
-against the issue tracker as far as it could be read from here (the 24 best matches of the 83
-open issues and pull requests matching "performance", with the discussions of the pull requests
-named below).
+against the issue tracker: 79 of the 83 open issues and pull requests matching "performance",
+the 24 best matches of the 97 matching health bar, status bar, scrolling or cursor, and the
+discussions of the pull requests named below.
 
 One of Turbo's changes was made upstream first and is theirs: **the reusable list of valid
 target priorities in `AutoTarget.ChooseTarget`**, in place of a LINQ `ToList` per candidate —
@@ -228,27 +228,42 @@ Turbo and no spatial precheck or caching; it was closed as outdated once 06e4a2e
 
 Frame skipping is Turbo's own code, but not its own idea: issue
 [#18491](https://github.com/OpenRA/OpenRA/issues/18491) "performance, remove the forced renders"
-(August 2020, still open) asks for exactly that — a game loop that stops forcing a render per
-tick when the machine cannot keep up, with a lower frame rate as the escape rather than a slower
-game. Issue [#21218](https://github.com/OpenRA/OpenRA/issues/21218) "Performance issues with big
-amount of units" (November 2023, open) is the player-side report of the problem the scan change
-addresses, and [#14011](https://github.com/OpenRA/OpenRA/issues/14011) "Option to disable
-cosmetic renderings" (September 2017, open) asks for a detail-level setting that draws less on
-weak machines, which is the family Turbo's status-bar options belong to, though it names
-different things (idle overlays, contrails).
+(anvilvapre, August 2020, still open under Idea/Wishlist) asks for exactly that: "let the game
+skip render frames - rather than forcing them", a loop that notices when logic and rendering
+cannot keep up, and the option of running at 10–20 FPS that earlier releases had. Turbo's
+`MinFramerate` floor is that option. The same issue also asks for a split of network and
+rendering delay in the ping statistics, which Turbo does not do.
+
+Adjacent, not overlapping: [#21218](https://github.com/OpenRA/OpenRA/issues/21218) "Performance
+issues with big amount of units" (November 2023, open) is a report of lag at 400–600 units that
+RoosterDragon traced to many AI units pathfinding long distances on a large map, a cost Turbo
+does not touch; [#19419](https://github.com/OpenRA/OpenRA/issues/19419) (2021) reports frame
+rates collapsing in long games with many units and proposes lazy asset loading;
+[#9367](https://github.com/OpenRA/OpenRA/issues/9367) (2015) proposes spreading large
+calculations over several ticks; [#14011](https://github.com/OpenRA/OpenRA/issues/14011)
+"Option to disable cosmetic renderings" (2017) asks for a detail-level setting that draws less on
+weak machines, the family Turbo's status-bar options belong to, though it names different things
+(idle overlays, contrails), and the nearest status-bar request,
+[#14159](https://github.com/OpenRA/OpenRA/issues/14159) (2017), is for automatic transport-load
+bars, not fewer bars. For scrolling, open pull request
+[#22522](https://github.com/OpenRA/OpenRA/pull/22522) (Tweety3D, July 2026) adds a mouse-panning
+speed slider and widens the edge-scrolling one; the 25 ms per-frame credit that slows scrolling
+at low frame rates is not changed there or anywhere upstream. No issue or pull request was found
+on the pointer cost of a large selection, the drag box, the selection drawing, aircraft
+repulsion, or the idle-unit scans.
 
 Nothing else in Turbo was found upstream, merged or proposed: not the actor-map owner masks and
 the scan skip, the hostile-only walk, the per-actor target-type cache, the aircraft list, the
 still-animation and decoration skips, the selection drawing, the drag box set, the bars
-renderable skip, the pointer choice, or the scrolling cap (upstream's scrolling still credits a
-frame with at most 25 ms; its "smooth scrolling" is sub-pixel camera movement, a different
-thing). Upstream has done plenty of performance work of its own since the release that Turbo
-does not carry and a port to the next release would inherit: among others, cached renderable
-enumerables and a stable sort without per-frame allocation (RoosterDragon), faster trigonometry,
-deduplication, PNG parsing and radar ticking (Gustas), MersenneTwister allocation (Gustas), and
-open proposals for faster frozen actors under fog with thousands of actors (#22420, March 2026),
-zero-allocation trait enumerators (Vapre, #22501), `RenderUtil` (Vapre, #22499), cloak detection
-through the actor map (darkademic, #22291) and source-generated sync hashing (#21234).
+renderable skip, the pointer choice, or the scrolling cap (upstream's "smooth scrolling" is
+sub-pixel camera movement, a different thing). Upstream has done plenty of performance work of
+its own since the release that Turbo does not carry and a port to the next release would
+inherit: among others, cached renderable enumerables and a stable sort without per-frame
+allocation (RoosterDragon), faster trigonometry, deduplication, PNG parsing and radar ticking
+(Gustas), MersenneTwister allocation (Gustas), and open proposals for faster frozen actors under
+fog with thousands of actors (PunkPun, #22420, March 2026), zero-allocation trait enumerators
+(Vapre, #22501), `RenderUtil` (Vapre, #22499), cloak detection through the actor map
+(darkademic, #22291) and source-generated sync hashing (#21234).
 
 ## Caveats
 

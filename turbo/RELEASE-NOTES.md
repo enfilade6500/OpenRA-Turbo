@@ -3,6 +3,19 @@
 A faster client for OpenRA release-20250330. It simulates the same game, so it plays on the
 usual servers with the usual clients; the main menu shows `release-20250330 (Turbo 1.0)`.
 
+## Downloads
+
+Each one is OpenRA's own release-20250330 download with Turbo's files in it, nothing else
+changed; it sits next to a standard install and shares its settings, maps, replays and content.
+
+- **Windows:** `OpenRA-Turbo-1.0-release-20250330-x64-winportable.zip` — extract, run `RedAlert.exe`.
+- **Linux:** `OpenRA-Turbo-1.0-Red-Alert-x86_64.AppImage`, also Tiberian Dawn and Dune 2000 — make
+  executable, run.
+- **Patch for an existing install, any OS:** `OpenRA-Turbo-1.0-release-20250330-patch.zip` — the
+  changed files only; see the README. macOS has no whole-game download (Apple's signing rules);
+  TURBO.md has a Terminal recipe for patching an installed copy.
+- `SHA256SUMS.txt`.
+
 Measured on an 8-player, 57-minute Red Alert game replayed on one machine, simulation time per
 tick against the stock client: 20.4 → 15.8 ms over the whole game and 36.7 → 26.0 ms in the
 last ten minutes, then a further 11% and 12% from the later scan work (measured on a slower day,

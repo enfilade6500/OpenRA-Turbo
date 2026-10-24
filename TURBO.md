@@ -200,7 +200,33 @@ Then copy, from the build output into an installed release-20250330:
     mods/cnc/chrome/settings.yaml  (Tiberian Dawn has its own)
 
 over the files of the same name (keep copies of the originals to go back). The whole build can be
-run in place as well, like any OpenRA checkout.
+run in place as well, like any OpenRA checkout. (`settings-display.yaml` and `settings-advanced.yaml`
+are back to stock since the Turbo page took their rows; copying them is harmless.)
+
+### The downloads
+
+`turbo/package.sh` (Linux) makes the release downloads from a build of the three assemblies and
+OpenRA's own release-20250330 downloads, which it fetches once into `turbo-dist/upstream`:
+
+- `OpenRA-Turbo-<ver>-release-20250330-patch.zip` — the files above, laid out as they go into
+  an install, for patching a stock installation on any OS. `turbo/package.cmd` makes the same
+  zip on Windows from `make.cmd all`.
+- `OpenRA-Turbo-<ver>-release-20250330-x64-winportable.zip` — OpenRA's official Windows
+  portable zip with those files laid over it, nothing else touched. Unzip anywhere and run.
+- `OpenRA-Turbo-<ver>-{Red-Alert,Tiberian-Dawn,Dune-2000}-x86_64.AppImage` — OpenRA's
+  official AppImages, unpacked, overlaid and repacked with the official image's own runtime
+  (the `.desktop` name gains "Turbo" so a menu entry can be told from stock).
+- `SHA256SUMS.txt`.
+
+The whole-game downloads coexist with a stock install: the support directory (`%APPDATA%\OpenRA`
+on Windows, `~/.config/openra` on Linux) holds settings, maps, replays and game content, and
+every release-20250330 on the machine shares it. macOS gets no whole-game download: OpenRA's
+app bundles are signed and notarized, any change to a file inside breaks the signature, and
+re-signing needs an Apple developer account and a Mac. Patching an installed bundle by hand
+should work for the terminal-literate: copy the patch zip's files into
+`OpenRA - Red Alert.app/Contents/Resources/`, then clear the quarantine flag and re-sign ad hoc,
+`xattr -dr com.apple.quarantine "<the .app>" && codesign --force --deep --sign - "<the .app>"`.
+Untested: nobody on this project has a Mac.
 
 ## Relation to upstream OpenRA
 

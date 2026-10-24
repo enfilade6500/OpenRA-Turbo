@@ -1,6 +1,7 @@
 @echo off
-rem Assembles the Turbo release zip from this checkout after "make.cmd all": the three DLLs and the changed
+rem Assembles the Turbo patch zip from this checkout after "make.cmd all": the three DLLs and the changed
 rem mod files, laid out as they go into an install, plus the README and TURBO.md.  Run from the checkout root.
+rem The whole-game downloads (Windows portable zip, Linux AppImages) are made by turbo\package.sh on Linux.
 setlocal EnableExtensions
 set "VER=1.0"
 set "NAME=OpenRA-Turbo-%VER%-release-20250330"
@@ -20,7 +21,7 @@ copy /y mods\d2k\mod.yaml "%DIST%\mods\d2k\" >nul
 copy /y mods\ts\mod.yaml "%DIST%\mods\ts\" >nul
 copy /y README.md "turbo-dist\%NAME%\" >nul
 copy /y TURBO.md "turbo-dist\%NAME%\" >nul
-powershell -NoProfile -Command "Compress-Archive -Force -Path 'turbo-dist\%NAME%\*' -DestinationPath 'turbo-dist\%NAME%.zip'"
-powershell -NoProfile -Command "Get-FileHash -Algorithm SHA256 'turbo-dist\%NAME%\OpenRA\*.dll' | ForEach-Object { $_.Hash.ToLower() + '  ' + (Split-Path $_.Path -Leaf) }" > "turbo-dist\%NAME%.sha256.txt"
-type "turbo-dist\%NAME%.sha256.txt"
-echo Wrote turbo-dist\%NAME%.zip
+powershell -NoProfile -Command "Compress-Archive -Force -Path 'turbo-dist\%NAME%\*' -DestinationPath 'turbo-dist\%NAME%-patch.zip'"
+powershell -NoProfile -Command "Get-FileHash -Algorithm SHA256 'turbo-dist\%NAME%\OpenRA\*.dll' | ForEach-Object { $_.Hash.ToLower() + '  ' + (Split-Path $_.Path -Leaf) }" > "turbo-dist\%NAME%-patch.sha256.txt"
+type "turbo-dist\%NAME%-patch.sha256.txt"
+echo Wrote turbo-dist\%NAME%-patch.zip

@@ -17,14 +17,17 @@ Defaults and options, in *Settings > Turbo*:
 - A forced low frame rate option, to help the player test and calibrate the frame rate minimum.
 - Three ways to draw fewer status bars when thousands of units are on the screen: health bars on selected units only while damaged, no bars inside a drag box, no automatic bars on infantry.
 
-## Install (Windows)
+## Install
 
-1. Close the game. Find the OpenRA install folder (with `RedAlert.exe` or `OpenRA.exe`; usually `C:\Program Files (x86)\OpenRA\` or `%LOCALAPPDATA%\Programs\OpenRA\`). It must be release-20250330.
-2. Keep a copy of the folder, or of the files the zip replaces, to go back.
-3. Copy the contents of the zip's `OpenRA` folder over the install folder, replacing files.
-4. Start the game. The main menu should say `release-20250330 (Turbo 1.0)`.
+Nothing to install: the downloads are the complete game, OpenRA's own release-20250330 with Turbo's files in it. They live next to the standard game rather than replacing it, and they share its settings, maps, replays and game content, so everything is where you left it. To remove Turbo, delete what you downloaded. In all cases the main menu should say `release-20250330 (Turbo 1.0)`.
 
-To go back, put the saved files back, or reinstall release-20250330. Linux and macOS installs cannot be patched in place; build from source (`make`), see TURBO.md.
+**Windows:** download `OpenRA-Turbo-1.0-release-20250330-x64-winportable.zip`, right-click it and choose *Extract All*, open the folder it made and run `RedAlert.exe` (or `TiberianDawn.exe`, `Dune2000.exe`). Make a shortcut to it if you like.
+
+**Linux:** download `OpenRA-Turbo-1.0-Red-Alert-x86_64.AppImage` (or Tiberian Dawn, Dune 2000), make it executable (right-click → Properties → *Allow executing as program*, or `chmod +x`), and run it.
+
+**macOS:** no ready-made download, because Apple's signing rules do not allow a modified app to run without an Apple developer account behind it. If you are comfortable with the Terminal, TURBO.md has a recipe for patching an installed copy.
+
+**Patching an existing install instead** (any OS): `OpenRA-Turbo-1.0-release-20250330-patch.zip` holds just the changed files, laid out as they go into the install folder. Close the game, keep a copy of the files it replaces, copy the zip's `OpenRA` folder over the install (release-20250330 only), start the game. To go back, put the saved files back or reinstall release-20250330.
 
 ## For developers
 

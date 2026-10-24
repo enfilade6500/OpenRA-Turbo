@@ -202,6 +202,39 @@ Then copy, from the build output into an installed release-20250330:
 over the files of the same name (keep copies of the originals to go back). The whole build can be
 run in place as well, like any OpenRA checkout.
 
+## Relation to upstream OpenRA
+
+Checked on 2026-10-24 against upstream's `bleed` branch (at dbe6747333, 2026-10-15; about 600
+commits since release-20250330) and the heads of its ~680 most recent pull requests (#21700 and
+up, merged or not), file by file for everything Turbo touches and by title for the rest.
+
+One of Turbo's changes was made upstream first and is theirs: **the reusable list of valid
+target priorities in `AutoTarget.ChooseTarget`**, in place of a LINQ `ToList` per candidate —
+Gustas, [bb0a39ba6c](https://github.com/OpenRA/OpenRA/commit/bb0a39ba6c) "Don't allocate
+priorities" (April 2025), with the clear moved to the top of the loop in
+[ef8077b589](https://github.com/OpenRA/OpenRA/commit/ef8077b589) "Fix autotarget ignoring
+target validity" (May 2026). Turbo's version was written without knowing it and matches the
+fixed form; the rest of that change (the filter before the visibility checks, the hostile-only
+walk, the cached target types, the armament test without enumerators) is not upstream.
+RoosterDragon's [06e4a2e010](https://github.com/OpenRA/OpenRA/commit/06e4a2e010) "Reduce
+allocations in main game loop" (December 2025) also addresses the armament-range lambda in the
+same loop, by containing it in a local function; Turbo replaces the enumerators instead. An open
+pull request by Vapre, [#21948](https://github.com/OpenRA/OpenRA/pull/21948) "Less allocations
+in AutoTarget" (June 2025), rewrites the same loop without LINQ, with the same aim as those
+parts of Turbo and no spatial precheck or caching.
+
+Nothing else in Turbo was found upstream, merged or proposed: not the actor-map owner masks and
+the scan skip, the hostile-only walk, the per-actor target-type cache, the aircraft list, the
+still-animation and decoration skips, the selection drawing, the drag box set, the bars
+renderable skip, the pointer choice, frame skipping, or the scrolling cap (upstream's scrolling
+still credits a frame with at most 25 ms; its "smooth scrolling" is sub-pixel camera movement,
+a different thing). Upstream has done plenty of performance work of its own since the release
+that Turbo does not carry and a port to the next release would inherit: among others, cached
+renderable enumerables and a stable sort without per-frame allocation (RoosterDragon), faster
+trigonometry, deduplication, PNG parsing and radar ticking (Gustas), MersenneTwister allocation
+(Gustas), and open proposals for zero-allocation trait enumerators (Vapre, #22501), `RenderUtil`
+(Vapre, #22499) and cloak detection through the actor map (darkademic, #22291).
+
 ## Caveats
 
 - A real desync would show as the usual "out of sync" drop, for the player running this client.

@@ -214,9 +214,10 @@ checks against their SHA-256 as published on OpenRA's release page (pinned in th
   zip on Windows from `make.cmd all`.
 - `OpenRA-Turbo-<ver>-release-20250330-x64-winportable.zip` — OpenRA's official Windows
   portable zip with those files laid over it, nothing else touched. Unzip anywhere and run.
-- `OpenRA-Turbo-<ver>-{Red-Alert,Tiberian-Dawn,Dune-2000}-x86_64.AppImage` — OpenRA's
-  official AppImages, unpacked, overlaid and repacked with the official image's own runtime
-  (the `.desktop` name gains "Turbo" so a menu entry can be told from stock).
+- `OpenRA-Turbo-<ver>-Red-Alert-x86_64.AppImage` — OpenRA's official AppImage, unpacked,
+  overlaid and repacked with the official image's own runtime (the `.desktop` name gains "Turbo"
+  so a menu entry can be told from stock). Only Red Alert is built, being the only mod tested;
+  the script builds the Tiberian Dawn and Dune 2000 ones the same way if asked.
 - `SHA256SUMS.txt`.
 
 The released files are not built on anyone's own machine. The GitHub Actions workflow

@@ -21,9 +21,9 @@ Defaults and options, in *Settings > Turbo*:
 
 Nothing to install: the downloads are the complete game, OpenRA's own release-20250330 with Turbo's files in it. They live next to the standard game rather than replacing it, and they share its settings, maps, replays and game content, so everything is where you left it. To remove Turbo, delete what you downloaded. In all cases the main menu should say `release-20250330 (Turbo 1.0)`.
 
-**Windows:** download `OpenRA-Turbo-1.0-release-20250330-x64-winportable.zip`, right-click it and choose *Extract All*, open the folder it made and run `RedAlert.exe` (or `TiberianDawn.exe`, `Dune2000.exe`). Make a shortcut to it if you like.
+**Windows:** download `OpenRA-Turbo-1.0-release-20250330-x64-winportable.zip`, right-click it and choose *Extract All*, open the folder it made and run `RedAlert.exe`. Make a shortcut to it if you like.
 
-**Linux:** download `OpenRA-Turbo-1.0-Red-Alert-x86_64.AppImage` (or Tiberian Dawn, Dune 2000), make it executable (right-click → Properties → *Allow executing as program*, or `chmod +x`), and run it.
+**Linux:** download `OpenRA-Turbo-1.0-Red-Alert-x86_64.AppImage`, make it executable (right-click → Properties → *Allow executing as program*, or `chmod +x`), and run it.
 
 **macOS:** no ready-made download, because Apple's signing rules do not allow a modified app to run without an Apple developer account behind it. If you are comfortable with the Terminal, TURBO.md has a recipe for patching an installed copy.
 
@@ -58,7 +58,7 @@ Credit where it is due: one piece of the scan change, the reusable list of valid
 ## Problems and limits
 
 - The one thing this client can do that the standard one cannot is drop *you* with "out of sync" while everyone else plays on. It has not happened in testing; if it does, please report it with the replay and the map.
-- Tested on Red Alert. Tiberian Dawn, Dune 2000 and Tiberian Sun run the same engine code but have not had a long game checked against stock clients.
+- Red Alert only. Tiberian Dawn and Dune 2000 run the same engine code and happen to be in the Windows download because OpenRA's is one zip for all three, but they are untested and there is no Linux download for them; anyone who wants to try them is on their own.
 - The next OpenRA release will need the work ported again.
 
 Source: [enfilade6500/OpenRA-Turbo](https://github.com/enfilade6500/OpenRA-Turbo). OpenRA's own README is [README-OpenRA.md](README-OpenRA.md); the license is OpenRA's (GPLv3). From the same author: [ZeroLag](https://github.com/enfilade6500/OpenRA-ZeroLag), a server-side fork that takes the lag out of big games; the two are independent and work together.

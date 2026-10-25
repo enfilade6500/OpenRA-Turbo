@@ -86,7 +86,8 @@ if [ -z "$APPIMAGETOOL" ]; then
 else
 	chmod +x "$APPIMAGETOOL"
 	mkdir "$WORK/tool" && (cd "$WORK/tool" && "$APPIMAGETOOL" --appimage-extract >/dev/null)
-	for mod in Red-Alert Tiberian-Dawn Dune-2000; do
+	# Red Alert only: it is the mod that has been tested. Tiberian-Dawn and Dune-2000 build the same way.
+	for mod in Red-Alert; do
 		echo "AppImage: $mod"
 		fetch "OpenRA-$mod-x86_64.AppImage"
 		chmod +x "$UP/OpenRA-$mod-x86_64.AppImage"

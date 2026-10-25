@@ -9,8 +9,7 @@ Each one is OpenRA's own release-20250330 download with Turbo's files in it, not
 changed; it sits next to a standard install and shares its settings, maps, replays and content.
 
 - **Windows:** `OpenRA-Turbo-1.0-release-20250330-x64-winportable.zip` — extract, run `RedAlert.exe`.
-- **Linux:** `OpenRA-Turbo-1.0-Red-Alert-x86_64.AppImage`, also Tiberian Dawn and Dune 2000 — make
-  executable, run.
+- **Linux:** `OpenRA-Turbo-1.0-Red-Alert-x86_64.AppImage` — make executable, run.
 - **Patch for an existing install, any OS:** `OpenRA-Turbo-1.0-release-20250330-patch.zip` — the
   changed files only; see the README. macOS has no whole-game download (Apple's signing rules);
   TURBO.md has a Terminal recipe for patching an installed copy.
@@ -59,9 +58,9 @@ A benchmark that records real games (`bench.cmd`, see TURBO.md), and a profiler
 
 ## Known limits
 
-- Tested on Red Alert; Tiberian Dawn, Dune 2000 and Tiberian Sun run the same engine code but
-  have not had a long game checked against stock clients. An "out of sync" that only the Turbo
-  player gets is the signal; please report it with the replay.
+- Red Alert only. Tiberian Dawn and Dune 2000 are in the Windows download because OpenRA's is
+  one zip for all three, but they are untested and have no Linux download. An "out of sync" that
+  only the Turbo player gets is the signal; please report it with the replay.
 - Hidden looping animations resume where they stopped rather than where they would have been.
 - The settings labels are English only.
 - The next OpenRA release will need the work ported again.

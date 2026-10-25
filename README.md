@@ -51,6 +51,8 @@ Drawing:
 
 Tooling, all off unless asked for: a live bench that records real games tick by tick (`bench.cmd`), a replay bench with padded or ballasted ticks, a profiler that splits simulation time by trait, activity and actor type (`Bench.Profile=true`), and a headless settings-page check with screenshots (`Bench.Settings=<page>`).
 
+The downloads are built by GitHub Actions from the tagged commit, with a signed provenance record (`gh attestation verify <file> --owner enfilade6500`), not on anyone's own computer; each one is OpenRA's official download with Turbo's files laid over it, checked against the official SHA-256 first.
+
 Credit where it is due: one piece of the scan change, the reusable list of valid target priorities, was made in OpenRA's development branch first (Gustas, April 2025), and frame skipping has been an open request there since 2020 (#18491). Turbo's versions were written independently; the full comparison with upstream, including the performance work of theirs that Turbo does not carry, is in TURBO.md under "Relation to upstream OpenRA".
 
 ## Problems and limits

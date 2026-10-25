@@ -206,7 +206,8 @@ are back to stock since the Turbo page took their rows; copying them is harmless
 ### The downloads
 
 `turbo/package.sh` (Linux) makes the release downloads from a build of the three assemblies and
-OpenRA's own release-20250330 downloads, which it fetches once into `turbo-dist/upstream`:
+OpenRA's own release-20250330 downloads, which it fetches once into `turbo-dist/upstream` and
+checks against their SHA-256 as published on OpenRA's release page (pinned in the script):
 
 - `OpenRA-Turbo-<ver>-release-20250330-patch.zip` — the files above, laid out as they go into
   an install, for patching a stock installation on any OS. `turbo/package.cmd` makes the same
@@ -217,6 +218,16 @@ OpenRA's own release-20250330 downloads, which it fetches once into `turbo-dist/
   official AppImages, unpacked, overlaid and repacked with the official image's own runtime
   (the `.desktop` name gains "Turbo" so a menu entry can be told from stock).
 - `SHA256SUMS.txt`.
+
+The released files are not built on anyone's own machine. The GitHub Actions workflow
+`.github/workflows/turbo.yml` builds the engine, runs the mod checks and runs `package.sh` for
+every push, so each commit has a public build log with the downloads attached to it; pushing a tag
+`turbo-<version>` (which must equal `Turbo.Version`) additionally records a signed provenance
+attestation for each download and opens a draft release holding them, which a person reviews and
+publishes. Anyone can check that a download came out of that workflow, from that commit, with
+`gh attestation verify <file> --owner enfilade6500`. OpenRA's own workflows (its CI, release
+packaging, itch.io and documentation uploads) are not carried, since they are its release
+machinery and not Turbo's.
 
 The whole-game downloads coexist with a stock install: the support directory (`%APPDATA%\OpenRA`
 on Windows, `~/.config/openra` on Linux) holds settings, maps, replays and game content, and

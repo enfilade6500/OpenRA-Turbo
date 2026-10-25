@@ -1,0 +1,80 @@
+name: Turbo
+
+# Every push builds the engine, runs the mod checks, and packages the downloads with turbo/package.sh, so
+# each commit has a public build log. A tag turbo-<version> also records a signed provenance attestation
+# for the downloads (verify with: gh attestation verify <file> --owner enfilade6500) and opens a draft
+# release holding them, which a person reviews and publishes.
+
+on:
+  push:
+    branches: ['**']
+    tags: ['turbo-*']
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  id-token: write
+  attestations: write
+
+jobs:
+  build:
+    name: Build, test, package
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Clone
+        uses: actions/checkout@v4
+
+      - name: Install .NET 6.0
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '6.0.x'
+
+      - name: Tag matches Turbo.Version
+        if: startsWith(github.ref, 'refs/tags/turbo-')
+        run: |
+          ver="${GITHUB_REF_NAME#turbo-}"
+          grep -q "Version = \"$ver\";" OpenRA.Game/Turbo.cs || { echo "tag $GITHUB_REF_NAME but Turbo.cs says $(grep 'Version =' OpenRA.Game/Turbo.cs)"; exit 1; }
+          echo "TURBO_VERSION=$ver" >> "$GITHUB_ENV"
+
+      - name: Build
+        run: make all
+
+      - name: Test mods
+        run: make TREAT_WARNINGS_AS_ERRORS=true test
+
+      - name: Package
+        run: |
+          mkdir -p turbo-dist/upstream
+          curl -sSL -o turbo-dist/upstream/appimagetool-x86_64.AppImage \
+            https://github.com/AppImage/appimagetool/releases/download/continuous/appimagetool-x86_64.AppImage
+          turbo/package.sh bin turbo-dist
+
+      - name: Keep the downloads with this run
+        uses: actions/upload-artifact@v4
+        with:
+          name: OpenRA-Turbo-${{ github.sha }}
+          path: |
+            turbo-dist/*.zip
+            turbo-dist/*.AppImage
+            turbo-dist/SHA256SUMS.txt
+
+      - name: Attest provenance
+        if: startsWith(github.ref, 'refs/tags/turbo-')
+        uses: actions/attest-build-provenance@v2
+        with:
+          subject-path: |
+            turbo-dist/*.zip
+            turbo-dist/*.AppImage
+
+      - name: Draft the release
+        if: startsWith(github.ref, 'refs/tags/turbo-')
+        uses: softprops/action-gh-release@v2
+        with:
+          draft: true
+          name: OpenRA Turbo ${{ env.TURBO_VERSION }}
+          body_path: turbo/RELEASE-NOTES.md
+          files: |
+            turbo-dist/*.zip
+            turbo-dist/*.AppImage
+            turbo-dist/SHA256SUMS.txt

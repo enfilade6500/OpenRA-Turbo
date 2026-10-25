@@ -16,21 +16,33 @@
 # <outdir>/upstream or on PATH). package.cmd is the Windows counterpart for the patch zip alone.
 set -euo pipefail
 
-VER=1.0
 TAG=release-20250330
 BIN=$(readlink -f "${1:?directory holding the built assemblies}")
 OUT=$(readlink -f "${2:-turbo-dist}")
 SRC=$(readlink -f "$(dirname "$0")/..")
 UP="$OUT/upstream"
+VER=$(sed -n 's/.*Version = "\([^"]*\)".*/\1/p' "$SRC/OpenRA.Game/Turbo.cs")
+[ -n "$VER" ] || { echo "no Version in OpenRA.Game/Turbo.cs" >&2; exit 1; }
 NAME="OpenRA-Turbo-$VER-$TAG"
 RELEASES=https://github.com/OpenRA/OpenRA/releases/download/$TAG
+
+# SHA-256 of OpenRA's official downloads, as published on its release page; a fetched file must match.
+declare -A OFFICIAL=(
+	["OpenRA-$TAG-x64-winportable.zip"]=880d46098dbdafaabf26a1c2411f23d60abe0a5c78f5b9eaf23c1e45ce6cb6fc
+	["OpenRA-Red-Alert-x86_64.AppImage"]=3cb71c7428188c8526dd8916993fc16fa17ba5f28a35968a8267f3db9f2186fe
+	["OpenRA-Tiberian-Dawn-x86_64.AppImage"]=b3d202d1bf701be5989c41c256d19bd2b1788694df01e343ade865cf1190706b
+	["OpenRA-Dune-2000-x86_64.AppImage"]=7585986bf0cd488debaec3fadf853c1901003eff945dbad5de95b0b6bd781a67
+)
 
 for f in OpenRA.Game.dll OpenRA.Mods.Common.dll OpenRA.Mods.Cnc.dll; do
 	[ -f "$BIN/$f" ] || { echo "missing $BIN/$f" >&2; exit 1; }
 done
 
 mkdir -p "$OUT" "$UP"
-fetch() { [ -f "$UP/$1" ] || { echo "Fetching $1"; curl -sSL -o "$UP/$1" "$RELEASES/$1"; }; }
+fetch() {
+	[ -f "$UP/$1" ] || { echo "Fetching $1"; curl -sSL -o "$UP/$1" "$RELEASES/$1"; }
+	echo "${OFFICIAL[$1]}  $UP/$1" | sha256sum -c --quiet || { echo "$1 is not the official file" >&2; exit 1; }
+}
 
 # Turbo's files, laid over a game directory. Mod files go only where the mod exists (an AppImage holds one mod).
 overlay() {

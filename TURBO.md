@@ -4,9 +4,9 @@ A faster client for OpenRA release-20250330: a set of client-side changes that m
 faster on the player's own computer. None of them changes what the game simulates: a player
 running Turbo plays in the same games, on the same servers, as players running the stock
 release, and the stock release's multiplayer version check passes. The main menu shows
-`release-20250330 (Turbo 1.0)`; the mod version servers see is the release's. The branch is based
-directly on the release and contains nothing of the ZeroLag server work. The knobs it adds are on
-a *Turbo* page in the settings.
+`release-20250330 (Turbo 1.0)`; the mod version servers see is the release's. The source is based
+directly on the release; it shares nothing with the author's ZeroLag server fork beyond stock
+OpenRA. The knobs it adds are on a *Turbo* page in the settings.
 
 ## What it does
 

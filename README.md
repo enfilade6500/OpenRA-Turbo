@@ -59,4 +59,4 @@ Credit where it is due: one piece of the scan change, the reusable list of valid
 - Tested on Red Alert. Tiberian Dawn, Dune 2000 and Tiberian Sun run the same engine code but have not had a long game checked against stock clients.
 - The next OpenRA release will need the work ported again.
 
-Source: this branch (`turbo`) of [enfilade6500/OpenRA-ZeroLag](https://github.com/enfilade6500/OpenRA-ZeroLag). OpenRA's own README is [README-OpenRA.md](README-OpenRA.md); the license is OpenRA's (GPLv3).
+Source: [enfilade6500/OpenRA-Turbo](https://github.com/enfilade6500/OpenRA-Turbo). OpenRA's own README is [README-OpenRA.md](README-OpenRA.md); the license is OpenRA's (GPLv3). From the same author: [ZeroLag](https://github.com/enfilade6500/OpenRA-ZeroLag), a server-side fork that takes the lag out of big games; the two are independent and work together.

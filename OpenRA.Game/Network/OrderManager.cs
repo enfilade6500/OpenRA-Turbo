@@ -87,7 +87,13 @@ namespace OpenRA.Network
 			if (IsOutOfSync)
 				return;
 
-			Support.LiveBench.NoteDesync(frame);
+			// The bench may want the replay to play on regardless (Bench.IgnoreDesync)
+			if (Support.LiveBench.NoteDesync(frame))
+			{
+				IsOutOfSync = true;
+				return;
+			}
+
 			syncReport.DumpSyncReport(frame);
 			World.OutOfSync();
 			IsOutOfSync = true;

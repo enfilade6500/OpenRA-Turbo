@@ -43,6 +43,9 @@ jobs:
       - name: Test mods
         run: make TREAT_WARNINGS_AS_ERRORS=true test
 
+      - name: Unit tests
+        run: make tests
+
       - name: Package
         run: |
           mkdir -p turbo-dist/upstream

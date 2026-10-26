@@ -435,15 +435,16 @@ namespace OpenRA.Support
 				resets++;
 		}
 
-		public static void NoteDesync(int frame)
+		/// <summary>The replay's sync hash did not match. True if the bench wants the replay to play on regardless.</summary>
+		public static bool NoteDesync(int frame)
 		{
 			if (!Active)
-				return;
+				return false;
 
 			if (Live)
 			{
 				LiveGame.NoteDesync(frame);
-				return;
+				return false;
 			}
 
 			if (desyncFrame < 0)
@@ -451,12 +452,12 @@ namespace OpenRA.Support
 
 			if (ignoreDesync)
 			{
-				if (desyncFrame == frame)
-					Console.WriteLine($"LiveBench: desync at frame {frame}, carrying on (Bench.IgnoreDesync)");
-				return;
+				Console.WriteLine($"LiveBench: desync at frame {frame}, carrying on (Bench.IgnoreDesync)");
+				return true;
 			}
 
 			Finish($"desync at frame {frame}");
+			return false;
 		}
 
 		public static void Finish(string reason)

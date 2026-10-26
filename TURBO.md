@@ -193,8 +193,11 @@ the 15 FPS floor (a floor of 10 reaches the full 25).
 
 The bench now also splits the logic tick (`actors_ms`, `traits_ms`, `effects_ms`, `synchash_ms`,
 `tickrender_ms`, from the engine's own timers, so unlike the profiler's per-call sampling they do
-not inflate cheap frequent calls), and `Bench.IgnoreDesync=true` keeps a run going past a desync
-for workload measurements on placeholder content.
+not inflate cheap frequent calls), notes the garbage collections that ran inside a tick (`gc_gen`,
+`gc_pause_ms`: a long tick with a pause in it is the runtime's, not the game's), and
+`Bench.IgnoreDesync=true` keeps a run going past a desync for workload measurements on placeholder
+content. A replay recorded by a player who left before the others ends a frame or two short of its
+last recorded frame; the bench treats running out of orders as the end.
 
 ## Measuring real games: the live bench
 

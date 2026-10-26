@@ -33,7 +33,8 @@ Eight Chambers, first 236 ticks of a replay on the test machine: 20.6 ms a tick 
 1.1. Maps without thousands of static actors gain less; nothing is lost on any map.
 
 Also: the bench splits the logic tick into its phases (`actors_ms`, `traits_ms`, `effects_ms`,
-`synchash_ms`, `tickrender_ms`) and can carry on past a desync (`Bench.IgnoreDesync=true`).
+`synchash_ms`, `tickrender_ms`), notes garbage-collection pauses (`gc_gen`, `gc_pause_ms`) and can
+carry on past a desync (`Bench.IgnoreDesync=true`).
 
 ## From 1.0
 

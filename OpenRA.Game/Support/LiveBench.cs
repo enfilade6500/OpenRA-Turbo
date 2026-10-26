@@ -97,6 +97,11 @@ namespace OpenRA.Support
 			// the sync hash, and the once-per-tick render-state pass (ITickRender, run with the frame), from the engine's own timers
 			public double TickActors, TickTraits, TickEffects, SyncHash, TickRender;
 
+			// Garbage collections that ran during this tick: the highest generation collected (-1 = none) and the time the
+			// runtime had the threads stopped for them, which lands inside whichever phase was allocating at the time
+			public int GcGen = -1;
+			public double GcPause;
+
 			public void AddLogicPhases()
 			{
 				TickActors = PerfHistory.Items["tick_actors"].LastValue;
@@ -104,7 +109,18 @@ namespace OpenRA.Support
 				TickEffects = PerfHistory.Items["tick_effects"].LastValue;
 				SyncHash = PerfHistory.Items["synchash"].LastValue;
 				TickRender = PerfHistory.Items["tick_render"].LastValue;
+
+				var gc = GC.GetGCMemoryInfo(GCKind.Any);
+				if (gc.Index != lastGcIndex)
+				{
+					lastGcIndex = gc.Index;
+					GcGen = gc.Generation;
+					foreach (var pause in gc.PauseDurations)
+						GcPause += pause.TotalMilliseconds;
+				}
 			}
+
+			static long lastGcIndex = GC.GetGCMemoryInfo(GCKind.Any).Index;
 
 			/// <summary>A frame was drawn in this tick: add its times, and the selection drawing's share of them.</summary>
 			public void AddFrame(double totalMs, double beginMs, double flipMs)
@@ -300,9 +316,13 @@ namespace OpenRA.Support
 			if (!ticked)
 			{
 				// A replay that ends mid-game (the recording client left) stops the world ticking without a game over; it is
-				// over for the bench all the same
-				if (Game.OrderManager?.Connection is ReplayConnection ended && Game.OrderManager.NetFrameNumber >= ended.TickCount)
-					Finish(Measuring ? "replay ended" : "replay ended before measuring began");
+				// over for the bench all the same. The other clients' orders for the last frame or two are usually missing from
+				// the recording, so the world stops a little short of the last recorded frame
+				if (Game.OrderManager?.Connection is ReplayConnection ended && (Game.OrderManager.NetFrameNumber >= ended.TickCount || ended.AllOrdersDelivered))
+				{
+					var at = $" at net frame {Game.OrderManager.NetFrameNumber} of {ended.TickCount}, world tick {world.WorldTick}";
+					Finish((Measuring ? "replay ended" : "replay ended before measuring began") + at);
+				}
 
 				return;
 			}
@@ -401,7 +421,7 @@ namespace OpenRA.Support
 			csv = new StreamWriter(Path.Combine(outDir, name + ".csv"), false, Encoding.ASCII);
 			csv.WriteLine("tick,t_ms,late_ms,logic_ms,pad_ms,interval_ms,frames,skipped,render_ms,begin_ms,flip_ms,actors,in_view," +
 				"annot_gen_ms,annot_draw_ms,flush_ms,cursor_ms,selected,prepare_ms,world_ms,widgets_ms," +
-				"actors_ms,traits_ms,effects_ms,synchash_ms,tickrender_ms");
+				"actors_ms,traits_ms,effects_ms,synchash_ms,tickrender_ms,gc_gen,gc_pause_ms");
 			var clock = TimeSpan.FromMilliseconds((double)firstMeasuredTick * world.Timestep);
 			Console.WriteLine($"LiveBench: measuring from tick {firstMeasuredTick} (game clock {clock:m\\:ss}) at zoom {zoomUsed:F3}");
 		}
@@ -416,7 +436,7 @@ namespace OpenRA.Support
 				r.AnnotGen.ToString("F2", c), r.AnnotDraw.ToString("F2", c), r.Flush.ToString("F2", c), r.Cursor.ToString("F2", c), r.Selected.ToString(c),
 				r.Prepare.ToString("F2", c), r.WorldPass.ToString("F2", c), r.Widgets.ToString("F2", c),
 				r.TickActors.ToString("F2", c), r.TickTraits.ToString("F2", c), r.TickEffects.ToString("F2", c), r.SyncHash.ToString("F2", c),
-				r.TickRender.ToString("F2", c)));
+				r.TickRender.ToString("F2", c), r.GcGen.ToString(c), r.GcPause.ToString("F2", c)));
 		}
 
 		/// <summary>A frame was drawn; the times are what the main thread spent in it, in starting the world pass, and in the hand-off.</summary>
@@ -565,6 +585,10 @@ namespace OpenRA.Support
 				["effects_mean_ms"] = Mean(r => r.TickEffects),
 				["synchash_mean_ms"] = Mean(r => r.SyncHash),
 				["tickrender_mean_ms"] = Mean(r => r.TickRender),
+				["gc_count"] = Records.Count(r => r.GcGen >= 0),
+				["gc_gen2_count"] = Records.Count(r => r.GcGen >= 2),
+				["gc_pause_total_ms"] = Records.Sum(r => r.GcPause),
+				["gc_pause_max_ms"] = n > 0 ? Records.Max(r => r.GcPause) : 0,
 				["render_mean_ms"] = Mean(r => r.Render),
 				["begin_mean_ms"] = Mean(r => r.Begin),
 				["flip_mean_ms"] = Mean(r => r.Flip),
@@ -600,6 +624,7 @@ namespace OpenRA.Support
 				"{0,-26} {21,2}ms {1,-16} {2,-5} {3,5} {4,5} {5,4} {6,3} | ticks {7,5} capacity {8,6:F1}% interval {9,5:F1} p95 {10,5:F1} | " +
 				"logic {11,5:F1} (actors {25,4:F1} traits {26,4:F1} effects {27,4:F1} sync {28,4:F1} tickrender {29,4:F1}) pad {12,4:F1} " +
 				"render {13,5:F1} begin {14,4:F1} flip {15,5:F1} | fps {16,5:F1} skipped {17,4} late {18,4:F0}% resets {19} | " +
+				"gc {30} gen2 {31} pause {32,5:F0} max {33,4:F0} | " +
 				"zoom {22,5:F2} view {23,4:F0}/{24,4:F0} | {20}",
 				name, g.Mode, g.VSync ? "vsync" : "-", g.CapFramerateToGameFps ? "tick" : g.CapFramerate ? g.MaxFramerate.ToString(c) : "-",
 				logicFloorMs > 0 ? "L" + logicFloorMs.ToString("F0", c) : ballastMs > 0 ? "B" + ballastMs.ToString("F0", c) : "-",
@@ -608,7 +633,8 @@ namespace OpenRA.Support
 				summary["logic_mean_ms"], summary["pad_mean_ms"], summary["render_mean_ms"], summary["begin_mean_ms"], summary["flip_mean_ms"],
 				summary["fps"], skipped, summary["late_ticks_pct"], resets, finishReason, measureTimestep,
 				zoomUsed, summary["in_view_mean"], summary["actors_mean"],
-				summary["actors_mean_ms"], summary["traits_mean_ms"], summary["effects_mean_ms"], summary["synchash_mean_ms"], summary["tickrender_mean_ms"]);
+				summary["actors_mean_ms"], summary["traits_mean_ms"], summary["effects_mean_ms"], summary["synchash_mean_ms"], summary["tickrender_mean_ms"],
+				summary["gc_count"], summary["gc_gen2_count"], summary["gc_pause_total_ms"], summary["gc_pause_max_ms"]);
 			File.AppendAllText(Path.Combine(outDir, "summary.txt"), line + "\n");
 			Console.WriteLine(line);
 		}

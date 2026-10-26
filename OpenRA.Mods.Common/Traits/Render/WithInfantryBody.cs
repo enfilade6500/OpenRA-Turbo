@@ -93,10 +93,27 @@ namespace OpenRA.Mods.Common.Traits.Render
 			var rs = self.Trait<RenderSprites>();
 
 			DefaultAnimation = new Animation(init.World, rs.GetImage(self), RenderSprites.MakeFacingFunc(self));
-			rs.Add(new AnimationWithOffset(DefaultAnimation, null, () => IsTraitDisabled), info.Palette, info.IsPlayerPalette);
+			this.rs = rs;
+			bodyAnimation = new AnimationWithOffset(DefaultAnimation, null, () => IsTraitDisabled) { DisableChangeAnnounced = true };
+			rs.Add(bodyAnimation, info.Palette, info.IsPlayerPalette);
 			PlayStandAnimation(self);
 
 			move = init.Self.Trait<IMove>();
+		}
+
+		// PERF: As WithSpriteBody: the body's visibility follows IsTraitDisabled and the renderer is told when that changes,
+		// so a standing soldier's still frame is left alone between changes
+		readonly RenderSprites rs;
+		readonly AnimationWithOffset bodyAnimation;
+
+		protected override void TraitEnabled(Actor self)
+		{
+			rs.AnimationChanged(bodyAnimation);
+		}
+
+		protected override void TraitDisabled(Actor self)
+		{
+			rs.AnimationChanged(bodyAnimation);
 		}
 
 		protected override void Created(Actor self)

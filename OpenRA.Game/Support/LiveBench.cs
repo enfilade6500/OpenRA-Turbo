@@ -310,7 +310,16 @@ namespace OpenRA.Support
 			if (!Measuring)
 			{
 				if (world.WorldTick < warpToTick)
+				{
+					// A sign of life while skipping ahead, which on a long replay is most of the run
+					if (world.WorldTick % 5000 == 0)
+					{
+						var at = TimeSpan.FromMilliseconds((double)world.WorldTick * world.Timestep);
+						Console.WriteLine($"LiveBench: warping, tick {world.WorldTick} (game clock {at:h\\:mm\\:ss}), {world.Actors.Count()} actors, in sync so far");
+					}
+
 					return;
+				}
 
 				StartMeasuring(world, wr);
 			}

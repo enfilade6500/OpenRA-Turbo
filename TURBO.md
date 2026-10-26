@@ -165,9 +165,17 @@ tick from the first second on a fast computer. The first 236 ticks of a replay, 
 machine, back to back: 20.6 ms a tick with 1.0, 6.7 with 1.1 (runs on a busier machine gave 22–24
 and 7.7–8.4). What was 3.1 ms of actor ticks is 1.0; 7.9 ms of trait ticks is 0.2; 4.3 ms of render
 ticks is 0.1. What remains is mostly the sync hash (2.4 ms a tick on average: every actor's synced
-state every net frame, which is the protocol) and the engine's fixed per-tick work. Eighteen
-minutes of the same replay played on past its placeholder-content desync (`Bench.IgnoreDesync`)
-without an exception, logic rising to 15–18 ms a tick as the (divergent) game filled with units.
+state every net frame, which is the protocol) and the engine's fixed per-tick work. Later in the
+same game (ticks 18,000–24,000, nine to twelve minutes in, the armies fighting): 34.2 ms a tick
+with 1.0, 15.9 with 1.1 (actors 4.2, traits 4.8, effects 0.7, sync 2.5, render tick 1.1). With
+the real game content installed, 1.1 played the whole replay — 26,913 ticks, to the last frame
+the recording holds — in sync with the recorded hashes, and the whole Pit replay below (85,644
+ticks) likewise.
+
+Both builds show the same five or six 250–390 ms hitches over those 6,000 late-game ticks, about
+one every 1,100 ticks: the bench's new `gc_pause_ms` column puts every one of them inside a
+garbage collection (generation 0 or 1 — short-lived garbage, but a big heap to card-mark). That
+is inherited, not something 1.1 adds, and it is the next thing worth looking at.
 
 Headless playback of a server-side replay of an 8-player game on Big Vanilla Pit (57 game
 minutes, 3,300 to 3,600 actors late in the game), on one machine, stock versus this branch, mean

@@ -42,6 +42,15 @@ namespace OpenRA.Graphics
 		/// <summary>A loop of a single frame: a still image that no tick ever changes.</summary>
 		public bool IsStill => IsLoop && CurrentSequence != null && CurrentSequence.Length <= 1;
 
+		/// <summary>
+		/// Nothing a tick could change: a still, a held frame, or a finished PlayThen. Only a Play call changes it from
+		/// here, and <see cref="Changed"/> is raised when one does, so the owner may stop ticking it until then.
+		/// </summary>
+		public bool IsStatic => !tickAlways && (tickFunc == null || IsStill);
+
+		/// <summary>Raised when a Play call, ReplaceAnim or ChangeImage changes what the animation shows or does.</summary>
+		public event Action Changed;
+
 		public Animation(World world, string name)
 			: this(world, name, () => WAngle.Zero) { }
 
@@ -139,6 +148,18 @@ namespace OpenRA.Graphics
 		{
 			CurrentSequence = GetSequence(sequenceName);
 			timeUntilNextFrame = CurrentSequenceTickOrDefault();
+			Changed?.Invoke();
+		}
+
+		/// <summary>One frame of a sequence, held until the next Play call: a still that costs no ticks.</summary>
+		public void PlayFrame(string sequenceName, int frameIndex)
+		{
+			backwards = false;
+			tickAlways = false;
+			IsLoop = false;
+			tickFunc = null;
+			PlaySequence(sequenceName);
+			frame = frameIndex;
 		}
 
 		public void PlayRepeating(string sequenceName)
@@ -165,6 +186,7 @@ namespace OpenRA.Graphics
 			CurrentSequence = GetSequence(sequenceName);
 			timeUntilNextFrame = Math.Min(CurrentSequenceTickOrDefault(), timeUntilNextFrame);
 			frame %= CurrentSequence.Length;
+			Changed?.Invoke();
 			return true;
 		}
 
@@ -235,8 +257,8 @@ namespace OpenRA.Graphics
 				tickFunc?.Invoke();
 			else
 			{
-				// PERF: A still image (most units standing, every tree and wall) has nothing to advance
-				if (IsStill)
+				// PERF: A still image (most units standing, every tree and wall) or a finished animation has nothing to advance
+				if (tickFunc == null || IsStill)
 					return;
 
 				timeUntilNextFrame -= t;

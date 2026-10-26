@@ -455,6 +455,10 @@ namespace OpenRA
 				using (new PerfSample("tick_actors"))
 					foreach (var a in actors.Values)
 					{
+						// PERF: Nothing to run and nothing listening: the actor's tick would do nothing (see Actor.NeedsTick)
+						if (!a.NeedsTick)
+							continue;
+
 						var pstart = Support.AggregateProfiler.Now();
 						var activity = a.CurrentActivity;
 						a.Tick();
@@ -470,22 +474,28 @@ namespace OpenRA
 						}
 					}
 
-				ApplyToActorsWithTraitTimed<ITick>((actor, trait) => trait.Tick(actor), "Trait");
+				using (new PerfSample("tick_traits"))
+					ApplyToActorsWithTraitTimed<ITick>((actor, trait) => trait.Tick(actor), "Trait");
 
-				effects.DoTimed(e => e.Tick(this), "Effect");
+				using (new PerfSample("tick_effects"))
+					effects.DoTimed(e => e.Tick(this), "Effect");
 
 				Support.AggregateProfiler.Flush(WorldTick, actors.Count, effects.Count);
 			}
 
-			while (frameEndActions.Count != 0)
-				frameEndActions.Dequeue()(this);
+			using (new PerfSample("tick_frameend"))
+				while (frameEndActions.Count != 0)
+					frameEndActions.Dequeue()(this);
 		}
 
 		// For things that want to update their render state once per tick, ignoring pause state
 		public void TickRender(WorldRenderer wr)
 		{
-			ApplyToActorsWithTraitTimed<ITickRender>((actor, trait) => trait.TickRender(wr, actor), "Render");
-			ScreenMap.TickRender();
+			using (new PerfSample("tick_render"))
+			{
+				ApplyToActorsWithTraitTimed<ITickRender>((actor, trait) => trait.TickRender(wr, actor), "Render");
+				ScreenMap.TickRender();
+			}
 		}
 
 		public IEnumerable<Actor> Actors => actors.Values;
@@ -546,6 +556,23 @@ namespace OpenRA
 		public void ApplyToActorsWithTraitTimed<T>(Action<Actor, T> action, string text)
 		{
 			TraitDict.ApplyToActorsWithTraitTimed(action, text);
+		}
+
+		/// <summary>
+		/// PERF: A trait whose Tick would do nothing until something it knows about happens (a health bar that has settled,
+		/// a wall whose neighbours have not changed, sprites that are still) can ask not to be ticked, and ask again when
+		/// that something happens. Only for traits whose Tick touches nothing the simulation reads: a late wake-up may
+		/// then show on the screen, never in the game.
+		/// </summary>
+		public void SetTickDormant(Actor self, ITick trait, bool dormant)
+		{
+			TraitDict.SetDormant(self, trait, dormant);
+		}
+
+		/// <summary>The same for the once-per-frame render tick (ITickRender).</summary>
+		public void SetRenderTickDormant(Actor self, ITickRender trait, bool dormant)
+		{
+			TraitDict.SetDormant(self, trait, dormant);
 		}
 
 		public void ApplyToActorsWithTrait<T>(Action<Actor, T> action)

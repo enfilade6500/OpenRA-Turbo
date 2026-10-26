@@ -84,7 +84,9 @@ namespace OpenRA.Mods.Common.Traits.Render
 				subtractDAT = () => new WVec(0, 0, -self.World.Map.DistanceAboveTerrain(self.CenterPosition).Length);
 
 			DefaultAnimation = new Animation(init.World, rs.GetImage(self), baseFacing, Paused);
-			rs.Add(new AnimationWithOffset(DefaultAnimation, subtractDAT, () => IsTraitDisabled), info.Palette, info.IsPlayerPalette);
+			this.rs = rs;
+			bodyAnimation = new AnimationWithOffset(DefaultAnimation, subtractDAT, () => IsTraitDisabled) { DisableChangeAnnounced = true };
+			rs.Add(bodyAnimation, info.Palette, info.IsPlayerPalette);
 
 			// Cache the bounds from the default sequence to avoid flickering when the animation changes
 			boundsAnimation = new Animation(init.World, rs.GetImage(self), baseFacing, Paused);
@@ -96,13 +98,24 @@ namespace OpenRA.Mods.Common.Traits.Render
 			return RenderSprites.NormalizeSequence(DefaultAnimation, self.GetDamageState(), sequence);
 		}
 
+		// PERF: The body's visibility follows IsTraitDisabled, and the renderer is told each time that changes (see
+		// AnimationWithOffset.DisableChangeAnnounced), so it can leave a still body alone in between
+		readonly RenderSprites rs;
+		readonly AnimationWithOffset bodyAnimation;
+
 		protected override void TraitEnabled(Actor self)
 		{
+			rs.AnimationChanged(bodyAnimation);
 			if (Info.StartSequence != null)
 				PlayCustomAnimation(self, Info.StartSequence,
 					() => DefaultAnimation.PlayRepeating(NormalizeSequence(self, Info.Sequence)));
 			else
 				DefaultAnimation.PlayRepeating(NormalizeSequence(self, Info.Sequence));
+		}
+
+		protected override void TraitDisabled(Actor self)
+		{
+			rs.AnimationChanged(bodyAnimation);
 		}
 
 		public virtual void PlayCustomAnimation(Actor self, string name, Action after = null)

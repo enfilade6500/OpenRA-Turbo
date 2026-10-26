@@ -27,7 +27,7 @@ namespace OpenRA.Mods.Common.Traits
 	}
 
 	public class FrozenUnderFog : ICreatesFrozenActors, IRenderModifier, IDefaultVisibility,
-		ITickRender, ISync, INotifyCreated, INotifyOwnerChanged, INotifyActorDisposing
+		ITickRender, ISync, INotifyCreated, INotifyOwnerChanged, INotifyActorDisposing, INotifyKilled
 	{
 		[Sync]
 		public int VisibilityHash;
@@ -39,6 +39,13 @@ namespace OpenRA.Mods.Common.Traits
 		PlayerDictionary<FrozenState> frozenStates;
 		bool isRendering;
 		bool created;
+
+		// PERF: Whether any player's frozen copy may be waiting for renderables (FrozenActor.NeedRenderables), so that the
+		// render tick need not ask each of them every frame: set by the copies themselves, cleared once all are served.
+		// While nothing is waiting the trait asks not to be render-ticked at all.
+		bool anyNeedRenderables;
+		bool renderTickDormant;
+		Actor self;
 
 		sealed class FrozenState
 		{
@@ -67,6 +74,7 @@ namespace OpenRA.Mods.Common.Traits
 
 		void INotifyCreated.Created(Actor self)
 		{
+			this.self = self;
 			frozenStates = new PlayerDictionary<FrozenState>(self.World, (player, playerIndex) =>
 			{
 				var frozenActor = new FrozenActor(self, this, footprint, player, startsRevealed);
@@ -116,6 +124,16 @@ namespace OpenRA.Mods.Common.Traits
 			frozen.RefreshHidden();
 		}
 
+		void ICreatesFrozenActors.OnRenderablesRequested(FrozenActor frozen)
+		{
+			anyNeedRenderables = true;
+			if (renderTickDormant)
+			{
+				renderTickDormant = false;
+				self.World.SetRenderTickDormant(self, this, false);
+			}
+		}
+
 		bool IsVisibleInner(Player byPlayer)
 		{
 			// If fog is disabled visibility is determined by shroud
@@ -136,6 +154,18 @@ namespace OpenRA.Mods.Common.Traits
 
 		void ITickRender.TickRender(WorldRenderer wr, Actor self)
 		{
+			if (!anyNeedRenderables)
+			{
+				if (!renderTickDormant)
+				{
+					renderTickDormant = true;
+					self.World.SetRenderTickDormant(self, this, true);
+				}
+
+				return;
+			}
+
+			anyNeedRenderables = false;
 			IRenderable[] renderables = null;
 			Rectangle[] bounds = null;
 			var mouseBounds = Polygon.Empty;
@@ -187,6 +217,22 @@ namespace OpenRA.Mods.Common.Traits
 			// Invalidate the frozen actor (which exists if this actor was captured from an enemy)
 			// for the current owner
 			frozenStates[self.Owner].FrozenActor.Invalidate();
+			ActorGone();
+		}
+
+		void INotifyKilled.Killed(Actor self, AttackInfo e)
+		{
+			ActorGone();
+		}
+
+		// PERF: The copies of a dead actor are dropped by their layers once not shown; the layers look only where told
+		void ActorGone()
+		{
+			if (!created)
+				return;
+
+			for (var playerIndex = 0; playerIndex < frozenStates.Count; playerIndex++)
+				frozenStates[playerIndex].FrozenActor.ActorGone();
 		}
 	}
 

@@ -129,6 +129,7 @@ namespace OpenRA.Mods.Common.Traits
 				return;
 
 			HP = MaxHP;
+			WakeTick(self);
 
 			var ai = new AttackInfo
 			{
@@ -187,6 +188,7 @@ namespace OpenRA.Mods.Common.Traits
 			}
 
 			HP = (HP - damage.Value).Clamp(0, MaxHP);
+			WakeTick(self);
 
 			var ai = new AttackInfo
 			{
@@ -230,12 +232,31 @@ namespace OpenRA.Mods.Common.Traits
 			InflictDamage(self, attacker, new Damage(MaxHP, damageTypes), true);
 		}
 
+		// PERF: DisplayHP (the health bar) follows HP over a few ticks and then has nothing to do until HP changes again;
+		// the trait asks not to be ticked in between (most actors, most of the time). Nothing the simulation reads.
+		bool tickDormant;
+
 		void ITick.Tick(Actor self)
 		{
 			if (HP >= DisplayHP)
 				DisplayHP = HP;
 			else
 				DisplayHP = (2 * DisplayHP + HP) / 3;
+
+			if (DisplayHP == HP && !tickDormant)
+			{
+				tickDormant = true;
+				self.World.SetTickDormant(self, this, true);
+			}
+		}
+
+		void WakeTick(Actor self)
+		{
+			if (tickDormant)
+			{
+				tickDormant = false;
+				self.World.SetTickDormant(self, this, false);
+			}
 		}
 	}
 

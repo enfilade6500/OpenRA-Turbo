@@ -71,7 +71,7 @@ namespace OpenRA.Mods.Common.Traits.Render
 			}
 
 			var anim = new Animation(init.World, image);
-			anim.PlayFetchIndex(RenderSprites.NormalizeSequence(anim, init.GetDamageState(), Sequence), () => adjacent);
+			anim.PlayFrame(RenderSprites.NormalizeSequence(anim, init.GetDamageState(), Sequence), adjacent);
 
 			yield return new SpriteActorPreview(anim, () => WVec.Zero, () => 0, p);
 		}
@@ -85,8 +85,13 @@ namespace OpenRA.Mods.Common.Traits.Render
 	sealed class WithWallSpriteBody : WithSpriteBody, INotifyRemovedFromWorld, IWallConnector, ITick
 	{
 		readonly WithWallSpriteBodyInfo wallInfo;
+		readonly Actor self;
 		int adjacent = 0;
 		bool dirty = true;
+
+		// PERF: The frame is held (PlayFrame) and only recomputed when a neighbour changes; in between the trait asks
+		// not to be ticked. Walls are the actors a map can have thousands of.
+		bool tickDormant;
 
 		bool IWallConnector.AdjacentWallCanConnect(Actor self, CPos wallLocation, string wallType, out CVec facing)
 		{
@@ -94,12 +99,26 @@ namespace OpenRA.Mods.Common.Traits.Render
 			return wallInfo.Type == wallType && Math.Abs(facing.X) + Math.Abs(facing.Y) == 1;
 		}
 
-		void IWallConnector.SetDirty() { dirty = true; }
+		void IWallConnector.SetDirty()
+		{
+			dirty = true;
+			WakeTick();
+		}
+
+		void WakeTick()
+		{
+			if (tickDormant)
+			{
+				tickDormant = false;
+				self.World.SetTickDormant(self, this, false);
+			}
+		}
 
 		public WithWallSpriteBody(ActorInitializer init, WithWallSpriteBodyInfo info)
 			: base(init, info)
 		{
 			wallInfo = info;
+			self = init.Self;
 		}
 
 		protected override void DamageStateChanged(Actor self)
@@ -107,13 +126,21 @@ namespace OpenRA.Mods.Common.Traits.Render
 			if (IsTraitDisabled)
 				return;
 
-			DefaultAnimation.PlayFetchIndex(NormalizeSequence(self, Info.Sequence), () => adjacent);
+			DefaultAnimation.PlayFrame(NormalizeSequence(self, Info.Sequence), adjacent);
 		}
 
 		void ITick.Tick(Actor self)
 		{
 			if (!dirty)
+			{
+				if (!tickDormant)
+				{
+					tickDormant = true;
+					self.World.SetTickDormant(self, this, true);
+				}
+
 				return;
+			}
 
 			// Update connection to neighbours
 			var adjacentActors = CVec.Directions.SelectMany(dir =>
@@ -137,18 +164,18 @@ namespace OpenRA.Mods.Common.Traits.Render
 			}
 
 			dirty = false;
+			if (!IsTraitDisabled)
+				DefaultAnimation.PlayFrame(NormalizeSequence(self, Info.Sequence), adjacent);
 		}
 
 		protected override void TraitEnabled(Actor self)
 		{
 			base.TraitEnabled(self);
 			dirty = true;
+			WakeTick();
 
-			DefaultAnimation.PlayFetchIndex(NormalizeSequence(self, Info.Sequence), () => adjacent);
+			DefaultAnimation.PlayFrame(NormalizeSequence(self, Info.Sequence), adjacent);
 			UpdateNeighbours(self);
-
-			// Set the initial animation frame before the render tick (for frozen actor previews)
-			self.World.AddFrameEndTask(_ => DefaultAnimation.Tick());
 		}
 
 		static void UpdateNeighbours(Actor self)

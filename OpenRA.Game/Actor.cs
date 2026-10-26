@@ -197,6 +197,7 @@ namespace OpenRA
 				visibilityModifiers = visibilityModifiersList.ToArray();
 				becomingIdles = becomingIdlesList.ToArray();
 				tickIdles = tickIdlesList.ToArray();
+				IdleTickWantedChanged();
 				Targetables = targetablesList.ToArray();
 				enabledTargetTypesCacheable = Targetables.All(t => t is ICachedTargetable c && c.EnabledTargetTypesAreCacheable);
 				var targetablePositions = targetablePositionsList.ToArray();
@@ -264,6 +265,28 @@ namespace OpenRA
 
 			if (addToWorld)
 				World.Add(this);
+		}
+
+		// PERF: An idle actor whose idle notifiers have nothing to do is skipped by the world's tick loop (see NeedsTick);
+		// this is the standing answer, kept up to date by the notifiers themselves
+		bool tickWhenIdle;
+
+		/// <summary>
+		/// Whether this tick has anything to do for the actor: an activity to run, or an idle notifier that wants ticking.
+		/// Read from the world's tick loop, so it looks at the fields alone.
+		/// </summary>
+		public bool NeedsTick => currentActivity != null || tickWhenIdle;
+
+		/// <summary>An idle notifier's <see cref="IIdleTickOptional.WantsIdleTick"/> has changed (or the actor was just made).</summary>
+		public void IdleTickWantedChanged()
+		{
+			tickWhenIdle = false;
+			foreach (var t in tickIdles)
+				if (t is not IIdleTickOptional o || o.WantsIdleTick)
+				{
+					tickWhenIdle = true;
+					return;
+				}
 		}
 
 		public void Tick()

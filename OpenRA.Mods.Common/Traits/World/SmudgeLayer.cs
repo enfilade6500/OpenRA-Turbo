@@ -104,11 +104,20 @@ namespace OpenRA.Mods.Common.Traits
 		PaletteReference paletteReference;
 		bool disposed;
 
+		// PERF: The smudges waiting under the fog are looked at again only when something could have changed for them:
+		// a smudge added or removed, the viewer's shroud changed anywhere, or another player viewed. Late in a game
+		// there are thousands of craters, most of them under fog for any one viewer, and this was a walk over all of
+		// them every frame.
+		Player trackedPlayer;
+		bool recheck = true;
+		readonly Action<PPos> shroudChanged;
+
 		public SmudgeLayer(Actor self, SmudgeLayerInfo info)
 		{
 			Info = info;
 			world = self.World;
 			hasSmoke = !string.IsNullOrEmpty(info.SmokeImage) && info.SmokeSequences.Length > 0;
+			shroudChanged = _ => recheck = true;
 
 			var sequences = world.Map.Sequences;
 			var types = sequences.Sequences(Info.Sequence);
@@ -169,6 +178,8 @@ namespace OpenRA.Mods.Common.Traits
 					position, w, Info.SmokeImage, Info.SmokeSequences.Random(Game.CosmeticRandom), Info.SmokePalette)));
 			}
 
+			recheck = true;
+
 			// A null Sequence indicates a deleted smudge.
 			if ((!dirty.ContainsKey(loc) || dirty[loc].Sequence == null) && !tiles.ContainsKey(loc))
 			{
@@ -199,10 +210,28 @@ namespace OpenRA.Mods.Common.Traits
 			// Setting Sequence to null to indicate a deleted smudge.
 			tile.Sequence = null;
 			dirty[loc] = tile;
+			recheck = true;
 		}
 
 		void ITickRender.TickRender(WorldRenderer wr, Actor self)
 		{
+			var player = world.RenderPlayer;
+			if (player != trackedPlayer)
+			{
+				if (trackedPlayer != null)
+					trackedPlayer.Shroud.OnShroudChanged -= shroudChanged;
+
+				trackedPlayer = player;
+				if (player != null)
+					player.Shroud.OnShroudChanged += shroudChanged;
+
+				recheck = true;
+			}
+
+			if (!recheck || dirty.Count == 0)
+				return;
+
+			recheck = false;
 			var remove = new List<CPos>();
 			foreach (var kv in dirty)
 			{

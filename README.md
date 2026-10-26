@@ -7,6 +7,7 @@ OpenRA Turbo is a minimal modification of the standard OpenRA release client con
 Under the hood:
 
 - **Big games run faster.** Idle units no longer re-check all their neighbours for targets every few ticks, aircraft keep their distance from each other without looking at every unit below them, and things that only get drawn (standing animations, rank icons, GPS dots) stop doing work for the simulation.
+- **Maps full of walls run at full speed.** A wall, a tree, a mine or a building standing there used to be visited several times every tick like a unit in combat; now actors with nothing to do are left alone. An 8-player interior map with 6,600 wall pieces went from 25 ms a tick at the start to under 10.
 - **Big selections draw faster.** Selecting thousands of units, or holding a drag box over them, used to double the time a frame took; now it adds little.
 - **Scrolling keeps its speed** at any frame rate; the standard client slows it down below 40 FPS.
 - **"Show when damaged" is free** on undamaged units, and the mouse pointer over a huge selection is chosen without asking every rifleman.
@@ -19,15 +20,15 @@ Defaults and options, in *Settings > Turbo*:
 
 ## Install
 
-Nothing to install: the downloads are the complete game, OpenRA's own release-20250330 with Turbo's files in it. They live next to the standard game rather than replacing it, and they share its settings, maps, replays and game content, so everything is where you left it. To remove Turbo, delete what you downloaded. In all cases the main menu should say `release-20250330 (Turbo 1.0)`.
+Nothing to install: the downloads are the complete game, OpenRA's own release-20250330 with Turbo's files in it. They live next to the standard game rather than replacing it, and they share its settings, maps, replays and game content, so everything is where you left it. To remove Turbo, delete what you downloaded. In all cases the main menu should say `release-20250330 (Turbo 1.1)`.
 
-**Windows:** download `OpenRA-Turbo-1.0-release-20250330-x64-winportable.zip`, right-click it and choose *Extract All*, open the folder it made and run `RedAlert.exe`. Make a shortcut to it if you like.
+**Windows:** download `OpenRA-Turbo-1.1-release-20250330-x64-winportable.zip`, right-click it and choose *Extract All*, open the folder it made and run `RedAlert.exe`. Make a shortcut to it if you like.
 
-**Linux:** download `OpenRA-Turbo-1.0-Red-Alert-x86_64.AppImage`, make it executable (right-click → Properties → *Allow executing as program*, or `chmod +x`), and run it.
+**Linux:** download `OpenRA-Turbo-1.1-Red-Alert-x86_64.AppImage`, make it executable (right-click → Properties → *Allow executing as program*, or `chmod +x`), and run it.
 
 **macOS:** no ready-made download, because Apple's signing rules do not allow a modified app to run without an Apple developer account behind it. If you are comfortable with the Terminal, TURBO.md has a recipe for patching an installed copy.
 
-**Patching an existing install instead** (any OS): `OpenRA-Turbo-1.0-release-20250330-patch.zip` holds just the changed files, laid out as they go into the install folder. Close the game, keep a copy of the files it replaces, copy the zip's `OpenRA` folder over the install (release-20250330 only), start the game. To go back, put the saved files back or reinstall release-20250330.
+**Patching an existing install instead** (any OS): `OpenRA-Turbo-1.1-release-20250330-patch.zip` holds just the changed files, laid out as they go into the install folder. Close the game, keep a copy of the files it replaces, copy the zip's `OpenRA` folder over the install (release-20250330 only), start the game. To go back, put the saved files back or reinstall release-20250330.
 
 ## For developers
 
@@ -39,6 +40,8 @@ Simulation:
 - **Scan candidates** are rejected by the cheap tests (relationship, target types) before the shroud lookups, with an actor's enabled target types cached between condition changes and no allocation per candidate.
 - **Aircraft repulsion** walks a per-bin list of aircraft rather than every actor under the flight path.
 - **Draw-only traits** do less per tick: still animations and hidden loops are not ticked (animations with a completion callback always are), rank decorations skip while still or hidden, GPS dots resolve visibility for the viewing player only, production bars compute on draw.
+- **Actors with nothing to do are not ticked** (1.1): an idle actor whose idle notifiers want no tick is skipped by the world loop; a trait can ask not to be ticked until something it knows about happens (`World.SetTickDormant`), which `Health` (display value settled), `WithWallSpriteBody` (neighbours unchanged) and `RenderSprites` (every animation static, with `Animation.Changed` to wake it) do; walls hold their frame instead of fetching it every tick.
+- **Frozen actors** (1.1): each player's `FrozenActorLayer` keeps its two synced hashes as running sums and ticks only the copies with something to do (a flash, a visibility update, a dead actor) instead of walking every copy on the map every tick; `FrozenUnderFog` keeps one "someone is waiting" flag and leaves the render tick while it is clear. Smudges under the fog are re-checked only when the shroud or the smudges changed.
 
 Drawing:
 

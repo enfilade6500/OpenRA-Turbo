@@ -20,6 +20,9 @@ namespace OpenRA.Traits
 	public interface ICreatesFrozenActors
 	{
 		void OnVisibilityChanged(FrozenActor frozen);
+
+		/// <summary>One of the trait's frozen copies has set <see cref="FrozenActor.NeedRenderables"/>.</summary>
+		void OnRenderablesRequested(FrozenActor frozen);
 	}
 
 	[TraitLocation(SystemActors.Player)]
@@ -68,8 +71,36 @@ namespace OpenRA.Traits
 		public bool Hidden { get; private set; } = false;
 
 		public bool Shrouded { get; private set; }
-		public bool NeedRenderables { get; set; }
-		public bool UpdateVisibilityNextTick { get; set; }
+
+		// PERF: The layer that holds this copy, told of everything that gives its Tick something to do (a flash, a visibility
+		// update, the actor's death) and of every change of Visible, so that it ticks only the copies concerned and keeps its
+		// synced hashes as running sums instead of walking every copy every tick
+		public FrozenActorLayer Layer { get; internal set; }
+
+		bool needRenderables;
+		public bool NeedRenderables
+		{
+			get => needRenderables;
+			set
+			{
+				needRenderables = value;
+				if (value)
+					frozenTrait.OnRenderablesRequested(this);
+			}
+		}
+
+		bool updateVisibilityNextTick;
+		public bool UpdateVisibilityNextTick
+		{
+			get => updateVisibilityNextTick;
+			set
+			{
+				updateVisibilityNextTick = value;
+				if (value)
+					Layer?.NeedsTick(this);
+			}
+		}
+
 		public IRenderable[] Renderables = NoRenderables;
 		public Rectangle[] ScreenBounds = NoBounds;
 
@@ -160,6 +191,15 @@ namespace OpenRA.Traits
 				UpdateVisibility();
 		}
 
+		/// <summary>Whether the next Tick has something left to do (after which the layer asks again).</summary>
+		public bool TickPending => flashTicks > 0 || updateVisibilityNextTick;
+
+		/// <summary>The actor has died or is being disposed: the layer must look at this copy again.</summary>
+		public void ActorGone()
+		{
+			Layer?.NeedsTick(this);
+		}
+
 		void UpdateVisibility()
 		{
 			UpdateVisibilityNextTick = false;
@@ -186,7 +226,10 @@ namespace OpenRA.Traits
 			// Force the backing trait to update so other actors can't
 			// query inconsistent state (both hidden or both visible)
 			if (Visible != wasVisible)
+			{
 				frozenTrait.OnVisibilityChanged(this);
+				Layer?.VisibleChanged(this);
+			}
 
 			NeedRenderables |= Visible && !wasVisible;
 		}
@@ -199,6 +242,7 @@ namespace OpenRA.Traits
 		public void Flash(Color color, float alpha)
 		{
 			flashTicks = 5;
+			Layer?.NeedsTick(this);
 			flashModifiers = TintModifiers.ReplaceColor;
 			flashTint = new float3(color.R, color.G, color.B) / 255f;
 			flashAlpha = alpha;
@@ -207,6 +251,7 @@ namespace OpenRA.Traits
 		public void Flash(float3 tint)
 		{
 			flashTicks = 5;
+			Layer?.NeedsTick(this);
 			flashModifiers = TintModifiers.None;
 			flashTint = tint;
 			flashAlpha = null;
@@ -256,6 +301,14 @@ namespace OpenRA.Traits
 		readonly Dictionary<uint, FrozenActor> frozenActorsById;
 		readonly SpatiallyPartitioned<FrozenActor> partitionedFrozenActors;
 
+		// PERF: The synced hashes as running sums (every copy's id, and the ids of the visible ones), and the copies whose
+		// Tick has something to do, so that a tick costs what changed rather than a walk over every copy on the map. The
+		// hashes are published at tick time exactly as the walk computed them: FrozenHash counts the copies present
+		// during the tick (including those it removes), VisibilityHash the ones visible after their Tick.
+		int frozenHashSum, visibilityHashSum;
+		readonly HashSet<FrozenActor> pending = new();
+		readonly List<FrozenActor> ticking = new();
+
 		public FrozenActorLayer(Actor self, FrozenActorLayerInfo info)
 		{
 			binSize = info.BinSize;
@@ -278,13 +331,39 @@ namespace OpenRA.Traits
 			frozenActorsById.Add(fa.ID, fa);
 			world.ScreenMap.AddOrUpdate(owner, fa);
 			partitionedFrozenActors.Add(fa, FootprintBounds(fa));
+
+			fa.Layer = this;
+			frozenHashSum += (int)fa.ID;
+			if (fa.Visible)
+				visibilityHashSum += (int)fa.ID;
+			if (fa.TickPending || fa.Actor == null)
+				pending.Add(fa);
 		}
 
 		public void Remove(FrozenActor fa)
 		{
 			partitionedFrozenActors.Remove(fa);
 			world.ScreenMap.Remove(owner, fa);
-			frozenActorsById.Remove(fa.ID);
+			if (!frozenActorsById.Remove(fa.ID))
+				return;
+
+			fa.Layer = null;
+			frozenHashSum -= (int)fa.ID;
+			if (fa.Visible)
+				visibilityHashSum -= (int)fa.ID;
+			pending.Remove(fa);
+		}
+
+		/// <summary>A copy's Tick has something to do (a flash, a visibility update, or its actor is gone).</summary>
+		public void NeedsTick(FrozenActor fa)
+		{
+			pending.Add(fa);
+		}
+
+		/// <summary>A copy's Visible has just flipped (only ever during its Tick, or before it is added).</summary>
+		public void VisibleChanged(FrozenActor fa)
+		{
+			visibilityHashSum += fa.Visible ? (int)fa.ID : -(int)fa.ID;
 		}
 
 		static Rectangle FootprintBounds(FrozenActor fa)
@@ -312,27 +391,32 @@ namespace OpenRA.Traits
 
 		void ITick.Tick(Actor self)
 		{
+			// Every copy present now counts, including those this tick removes
+			FrozenHash = frozenHashSum;
+
 			List<FrozenActor> frozenActorsToRemove = null;
-			VisibilityHash = 0;
-			FrozenHash = 0;
-
-			foreach (var kvp in frozenActorsById)
+			if (pending.Count > 0)
 			{
-				var id = kvp.Key;
-				var hash = (int)id;
-				FrozenHash += hash;
+				ticking.Clear();
+				ticking.AddRange(pending);
+				pending.Clear();
 
-				var frozenActor = kvp.Value;
-				frozenActor.Tick();
-
-				if (frozenActor.Visible)
-					VisibilityHash += hash;
-				else if (frozenActor.Actor == null)
+				foreach (var frozenActor in ticking)
 				{
-					frozenActorsToRemove ??= new List<FrozenActor>();
-					frozenActorsToRemove.Add(frozenActor);
+					frozenActor.Tick();
+
+					// A copy of an actor that is gone is dropped once the player can see that (the copy is not shown)
+					if (!frozenActor.Visible && frozenActor.Actor == null)
+					{
+						frozenActorsToRemove ??= new List<FrozenActor>();
+						frozenActorsToRemove.Add(frozenActor);
+					}
+					else if (frozenActor.TickPending)
+						pending.Add(frozenActor);
 				}
 			}
+
+			VisibilityHash = visibilityHashSum;
 
 			if (frozenActorsToRemove != null)
 				foreach (var fa in frozenActorsToRemove)

@@ -33,7 +33,7 @@ namespace OpenRA.Mods.Common.Scripting
 		public override object Create(ActorInitializer init) { return new ScriptTriggers(init.World, init.Self); }
 	}
 
-	public sealed class ScriptTriggers : INotifyIdle, INotifyDamage, INotifyKilled, INotifyProduction, INotifyOtherProduction,
+	public sealed class ScriptTriggers : IIdleTickOptional, INotifyDamage, INotifyKilled, INotifyProduction, INotifyOtherProduction,
 		INotifyObjectivesUpdated, INotifyCapture, INotifyInfiltrated, INotifyAddedToWorld, INotifyRemovedFromWorld, INotifyDiscovered, INotifyActorDisposing,
 		INotifyPassengerEntered, INotifyPassengerExited, INotifySold, INotifyWinStateChanged, INotifyTimeLimit
 	{
@@ -82,7 +82,12 @@ namespace OpenRA.Mods.Common.Scripting
 		public void RegisterCallback(Trigger trigger, LuaFunction func, ScriptContext context)
 		{
 			Triggerables(trigger).Add(new Triggerable(func, context, self));
+			if (trigger == Trigger.OnIdle)
+				self.IdleTickWantedChanged();
 		}
+
+		// PERF: Without an OnIdle handler, TickIdle has nothing to call; the actor need not be ticked for it
+		bool IIdleTickOptional.WantsIdleTick => Triggerables(Trigger.OnIdle).Count > 0;
 
 		public bool HasAnyCallbacksFor(Trigger trigger)
 		{
@@ -521,6 +526,8 @@ namespace OpenRA.Mods.Common.Scripting
 				foreach (var f in triggerables)
 					f.Dispose();
 				triggerables.Clear();
+				if (trigger == Trigger.OnIdle)
+					self.IdleTickWantedChanged();
 			});
 		}
 

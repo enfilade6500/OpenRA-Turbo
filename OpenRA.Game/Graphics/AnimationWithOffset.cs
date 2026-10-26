@@ -21,6 +21,13 @@ namespace OpenRA.Graphics
 		public readonly Func<bool> DisableFunc;
 		public readonly Func<WPos, int> ZOffset;
 
+		/// <summary>
+		/// PERF: The owner promises to call <see cref="OpenRA.Mods.Common.Traits.Render.RenderSprites.AnimationChanged"/>
+		/// (or the equivalent of its renderer) whenever DisableFunc's answer changes, so that the animation need not be
+		/// asked every tick while it is static.
+		/// </summary>
+		public bool DisableChangeAnnounced { get; init; }
+
 		public AnimationWithOffset(Animation a, Func<WVec> offset, Func<bool> disable)
 			: this(a, offset, disable, null) { }
 

@@ -426,6 +426,13 @@ namespace OpenRA.Traits
 	[RequireExplicitImplementation]
 	public interface INotifyIdle { void TickIdle(Actor self); }
 
+	/// <summary>
+	/// An <see cref="INotifyIdle"/> whose TickIdle does nothing while <see cref="WantsIdleTick"/> is false. An idle actor
+	/// whose idle notifiers all say so is not ticked at all (most buildings, walls and trees, every tick of the game).
+	/// The implementer calls <see cref="Actor.IdleTickWantedChanged"/> whenever the answer changes.
+	/// </summary>
+	public interface IIdleTickOptional : INotifyIdle { bool WantsIdleTick { get; } }
+
 	public interface IRenderAboveWorld { void RenderAboveWorld(Actor self, WorldRenderer wr); }
 	public interface IRenderShroud { void RenderShroud(WorldRenderer wr); }
 

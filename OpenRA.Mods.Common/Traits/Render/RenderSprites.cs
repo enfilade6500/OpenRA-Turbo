@@ -99,12 +99,38 @@ namespace OpenRA.Mods.Common.Traits.Render
 			WVec cachedOffset;
 			ISpriteSequence cachedSequence;
 
-			public AnimationWrapper(AnimationWithOffset animation, string palette, bool isPlayerPalette)
+			// PERF: Once the animation is static (a still, a held frame, a finished PlayThen) and has no visibility or
+			// offset function that could change its answer, ticking it changes nothing: it is left alone until the
+			// animation says it has changed (Animation.Changed), which wakes it and the trait.
+			public bool Dormant;
+			readonly bool canBeStatic;
+			readonly Action changed;
+
+			public AnimationWrapper(AnimationWithOffset animation, string palette, bool isPlayerPalette, Action wake)
 			{
 				Animation = animation;
 				Palette = palette;
 				IsPlayerPalette = isPlayerPalette;
+				canBeStatic = animation.OffsetFunc == null && (animation.DisableFunc == null || animation.DisableChangeAnnounced);
+				if (canBeStatic)
+				{
+					changed = () =>
+					{
+						Dormant = false;
+						wake();
+					};
+
+					animation.Animation.Changed += changed;
+				}
 			}
+
+			public void Detach()
+			{
+				if (changed != null)
+					Animation.Animation.Changed -= changed;
+			}
+
+			public void Wake() => Dormant = false;
 
 			public void CachePalette(WorldRenderer wr, Player owner)
 			{
@@ -139,6 +165,7 @@ namespace OpenRA.Mods.Common.Traits.Render
 				cachedOffset = offset;
 				cachedSequence = sequence;
 
+				Dormant = canBeStatic && Animation.Animation.IsStatic;
 				return updated;
 			}
 		}
@@ -146,7 +173,11 @@ namespace OpenRA.Mods.Common.Traits.Render
 		public readonly RenderSpritesInfo Info;
 		readonly string faction;
 		readonly List<AnimationWrapper> anims = new();
+		readonly Actor self;
 		string cachedImage;
+
+		// PERF: With every animation dormant the trait asks not to be ticked; an animation that changes wakes it
+		bool tickDormant;
 
 		public static Func<WAngle> MakeFacingFunc(Actor self)
 		{
@@ -160,7 +191,17 @@ namespace OpenRA.Mods.Common.Traits.Render
 		public RenderSprites(ActorInitializer init, RenderSpritesInfo info)
 		{
 			Info = info;
+			self = init.Self;
 			faction = init.GetValue<FactionInit, string>(init.Self.Owner.Faction.InternalName);
+		}
+
+		void WakeTick()
+		{
+			if (tickDormant)
+			{
+				tickDormant = false;
+				self.World.SetTickDormant(self, this, false);
+			}
 		}
 
 		public string GetImage(Actor self)
@@ -213,11 +254,25 @@ namespace OpenRA.Mods.Common.Traits.Render
 		protected virtual void Tick(Actor self)
 		{
 			var updated = false;
+			var active = false;
 			foreach (var a in anims)
+			{
+				if (a.Dormant)
+					continue;
+
 				updated |= a.Tick();
+				if (!a.Dormant)
+					active = true;
+			}
 
 			if (updated)
 				self.World.ScreenMap.AddOrUpdate(self);
+
+			if (!active && !tickDormant)
+			{
+				tickDormant = true;
+				self.World.SetTickDormant(self, this, true);
+			}
 		}
 
 		public void Add(AnimationWithOffset anim, string palette = null, bool isPlayerPalette = false)
@@ -229,12 +284,27 @@ namespace OpenRA.Mods.Common.Traits.Render
 				isPlayerPalette = Info.Palette == null;
 			}
 
-			anims.Add(new AnimationWrapper(anim, palette, isPlayerPalette));
+			anims.Add(new AnimationWrapper(anim, palette, isPlayerPalette, WakeTick));
+			WakeTick();
 		}
 
 		public void Remove(AnimationWithOffset anim)
 		{
+			foreach (var a in anims)
+				if (a.Animation == anim)
+					a.Detach();
+
 			anims.RemoveAll(a => a.Animation == anim);
+		}
+
+		/// <summary>The owner of <paramref name="anim"/> says its visibility changed (see AnimationWithOffset.DisableChangeAnnounced).</summary>
+		public void AnimationChanged(AnimationWithOffset anim)
+		{
+			foreach (var a in anims)
+				if (a.Animation == anim)
+					a.Wake();
+
+			WakeTick();
 		}
 
 		public static string UnnormalizeSequence(string sequence)

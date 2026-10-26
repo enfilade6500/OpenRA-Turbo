@@ -120,7 +120,52 @@ scrolls so the first frame of a scroll is credited with a frame, not with the ca
 scrolling (the mouse-scroll mode) was not time-based at all; it now credits frames longer than one
 sixtieth of a second with their length, and is otherwise what it was.
 
+**Actors with nothing to do are not ticked (1.1).** Every actor on the map was visited several times
+a tick whether anything happened to it or not: its own tick (an idle activity to run, idle
+notifiers to call), its `RenderSprites` (animations to advance), its `Health` (the health bar's
+display value to smooth), and for a wall its `WithWallSpriteBody` (neighbours to re-check). None
+of that does anything for a wall, a tree, a mine or a building standing there, and each visit is
+a cache miss into a scattered object, so a map with thousands of such actors paid several
+milliseconds a tick for them. Three things now stop that. An idle actor whose idle notifiers all
+say they want no tick (`IIdleTickOptional`; `ScriptTriggers` says so until a Lua `OnIdle` handler
+is registered) is skipped by the world's actor loop (`Actor.NeedsTick`). An `ITick` trait can ask
+not to be ticked until something it knows about happens (`World.SetTickDormant`; the trait
+dictionary keeps the flag beside the trait, so the tick loop skips it without touching it): `Health`
+once its display value has settled, until the next change of HP; `WithWallSpriteBody` until a
+neighbour changes; `RenderSprites` once every animation is static — a still, a held frame
+(`Animation.PlayFrame`, which the wall body now uses instead of fetching its frame every tick), a
+finished `PlayThen` — and has no offset or visibility function that could change its answer
+(`WithSpriteBody` announces its visibility changes instead of being asked). `Animation.Changed`
+wakes the sprites when a Play call changes them. Only traits whose tick touches nothing the
+simulation reads do this, so a missed wake-up could show on the screen, never in the game.
+
+**The frozen-actor bookkeeping is event-driven (1.1).** Each player's `FrozenActorLayer` walked
+every frozen copy on the map every tick (11 players × 6,600 walls on Eight Chambers: 73,000
+visits a tick) to tick it and to recompute two synced hashes, and `FrozenUnderFog` asked each of
+its copies every frame whether it wanted fresh renderables. The layer now keeps the hashes as
+running sums (adjusted on add, remove, and each change of `Visible`, which only ever happens in
+the copy's own tick) and ticks only the copies with something to do: a flash, a visibility update
+(the shroud callback already names them), or an actor that has died or been disposed
+(`FrozenUnderFog` tells the copies). The sums are published at tick time exactly as the walk
+computed them — the copies present during the tick, those visible after it — so the hashes are
+bit-identical, which the replay check confirms. `FrozenUnderFog` keeps one "someone is waiting"
+flag, set by the copies themselves, and drops out of the render tick while it is clear. Upstream's
+open pull request #22420 is after the same cost with a different approach (see "Relation to
+upstream OpenRA").
+
+**Smudges under the fog are re-checked only when something changed (1.1).** `SmudgeLayer` looked at
+every crater waiting under the viewer's fog every frame to see whether it had come into view —
+thousands of them late in a game, forever. It now does so only when a smudge was added or removed,
+the viewer's shroud changed anywhere, or the viewer changed.
+
 ## Measurements
+
+Eight Chambers (1.1): an 8-player interior map with 6,576 wall actors, which played at 25 ms a
+tick from the first second on a fast computer. The first 236 ticks of a replay, headless, on this
+machine: 21.8 to 24.2 ms a tick with 1.0, 7.7 to 8.4 with 1.1. What was 3.1 ms of actor ticks is
+1.3; 7.9 ms of trait ticks is 0.3; 4.3 ms of render ticks is 0.1. What remains is mostly the sync
+hash (2.4 ms a tick on average: every actor's synced state every net frame, which is the protocol)
+and the engine's fixed per-tick work.
 
 Headless playback of a server-side replay of an 8-player game on Big Vanilla Pit (57 game
 minutes, 3,300 to 3,600 actors late in the game), on one machine, stock versus this branch, mean
@@ -143,6 +188,11 @@ Synthetic map, 2,000 idle riflemen massed in one blob: 34.7 ms per tick stock, 9
 Frame skipping, on a synthetic 4,000-unit map at 1080p where a tick plus a frame takes 60 ms
 against a 40 ms budget: stock ran the game at 15 ticks per second, this branch at 20, bound by
 the 15 FPS floor (a floor of 10 reaches the full 25).
+
+The bench now also splits the logic tick (`actors_ms`, `traits_ms`, `effects_ms`, `synchash_ms`,
+`tickrender_ms`, from the engine's own timers, so unlike the profiler's per-call sampling they do
+not inflate cheap frequent calls), and `Bench.IgnoreDesync=true` keeps a run going past a desync
+for workload measurements on placeholder content.
 
 ## Measuring real games: the live bench
 
@@ -298,15 +348,27 @@ sub-pixel camera movement, a different thing). Upstream has done plenty of perfo
 its own since the release that Turbo does not carry and a port to the next release would
 inherit: among others, cached renderable enumerables and a stable sort without per-frame
 allocation (RoosterDragon), faster trigonometry, deduplication, PNG parsing and radar ticking
-(Gustas), MersenneTwister allocation (Gustas), and open proposals for faster frozen actors under
-fog with thousands of actors (PunkPun, #22420, March 2026), zero-allocation trait enumerators
-(Vapre, #22501), `RenderUtil` (Vapre, #22499), cloak detection through the actor map
+(Gustas), MersenneTwister allocation (Gustas), and open proposals for zero-allocation trait
+enumerators (Vapre, #22501), `RenderUtil` (Vapre, #22499), cloak detection through the actor map
 (darkademic, #22291) and source-generated sync hashing (#21234).
+
+Turbo 1.1's frozen-actor work and upstream's open pull request
+[#22420](https://github.com/OpenRA/OpenRA/pull/22420) "Improve frozen actor performance"
+(PunkPun, March 2026) go after the same cost — `FrozenActorLayer` and `FrozenUnderFog` with
+thousands of actors — and theirs was first. The approaches differ: that pull request describes
+immutable structures, cheaper hashing and fewer dictionary walks; Turbo keeps the synced hashes as
+running sums and ticks only the copies that have something to do. Turbo's was written without
+reading theirs, from the profile of one map, but the problem was theirs to name. The rest of 1.1
+(dormant traits, idle actors skipped, the smudge re-check) was not found upstream.
 
 ## Caveats
 
 - A real desync would show as the usual "out of sync" drop, for the player running this client.
   The replay evidence is strong; a small game before a big one is still sensible.
+- A trait that stops being ticked (1.1) and misses its wake-up would show a stale health bar, a
+  wall drawn with an old connection, or a still animation one change behind; none of it reaches
+  the simulation. Nothing of the kind has been seen; if it is, the actor type and what was done
+  to it are the report.
 - Hidden looping animations resume from where they stopped rather than from where they would
   have been. Nobody can tell, but it is a visible difference from stock in principle.
 - The settings labels are English only (keys in `mods/common/fluent/turbo.ftl`, one language).

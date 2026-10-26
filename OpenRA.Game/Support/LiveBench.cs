@@ -35,6 +35,8 @@ namespace OpenRA.Support
 	///   Bench.Duration=s       game seconds to measure, then exit (default: to the end of the replay)
 	///   Bench.LogicMs=ms       pad every logic tick to at least this long, to behave like a slower computer (default 0)
 	///   Bench.Ballast=ms       add this to every logic tick (default 0)
+	///   Bench.IgnoreDesync=true keep going when the replay's sync hashes stop matching (placeholder content, or a build
+	///                          whose simulation is meant to differ): the workload is still a game's, the proof is not
 	///   Bench.NoFrameSkip=true draw a frame after every tick whatever the time, as the game did before frames were
 	///                          skipped while the simulation is behind (Graphics.MinFramerate), for comparison
 	///   Bench.RenderRepeat=n   draw the world n times per frame, to behave like a weaker graphics card (default 1)
@@ -91,6 +93,19 @@ namespace OpenRA.Support
 			public double AnnotGen, AnnotDraw, Flush, Cursor, Prepare, WorldPass, Widgets;
 			public int Actors, InView, Selected;
 
+			// Where the logic tick went: the actors' own ticks (activities, idle notifications), the ITick traits, the effects,
+			// the sync hash, and the once-per-tick render-state pass (ITickRender, run with the frame), from the engine's own timers
+			public double TickActors, TickTraits, TickEffects, SyncHash, TickRender;
+
+			public void AddLogicPhases()
+			{
+				TickActors = PerfHistory.Items["tick_actors"].LastValue;
+				TickTraits = PerfHistory.Items["tick_traits"].LastValue;
+				TickEffects = PerfHistory.Items["tick_effects"].LastValue;
+				SyncHash = PerfHistory.Items["synchash"].LastValue;
+				TickRender = PerfHistory.Items["tick_render"].LastValue;
+			}
+
 			/// <summary>A frame was drawn in this tick: add its times, and the selection drawing's share of them.</summary>
 			public void AddFrame(double totalMs, double beginMs, double flipMs)
 			{
@@ -122,7 +137,7 @@ namespace OpenRA.Support
 		static int firstMeasuredTick = -1, resets, lastWorldTick;
 		static string finishReason, replayPath, mapTitle;
 		static int desyncFrame = -1;
-		static bool finished;
+		static bool finished, ignoreDesync;
 		static StreamWriter csv;
 
 		public static void Configure(Arguments args)
@@ -139,6 +154,7 @@ namespace OpenRA.Support
 			logicFloorMs = Parse(args.GetValue("Bench.LogicMs", "0"));
 			ballastMs = Parse(args.GetValue("Bench.Ballast", "0"));
 			NoFrameSkip = args.GetValue("Bench.NoFrameSkip", "false").Equals("true", StringComparison.OrdinalIgnoreCase);
+			ignoreDesync = args.GetValue("Bench.IgnoreDesync", "false").Equals("true", StringComparison.OrdinalIgnoreCase);
 			RenderRepeat = Math.Max(1, (int)Parse(args.GetValue("Bench.RenderRepeat", "1")));
 			var zoomArg = args.GetValue("Bench.Zoom", "0");
 			zoomToMap = zoomArg.Equals("map", StringComparison.OrdinalIgnoreCase);
@@ -311,6 +327,7 @@ namespace OpenRA.Support
 				Actors = world.Actors.Count(),
 				Selected = world.Selection.Actors.Count
 			};
+			current.AddLogicPhases();
 
 			// Keep the camera where it was put, whatever the mouse does, and count what the frame has to draw: the actors the
 			// renderer picks for the viewport
@@ -367,7 +384,8 @@ namespace OpenRA.Support
 
 			csv = new StreamWriter(Path.Combine(outDir, name + ".csv"), false, Encoding.ASCII);
 			csv.WriteLine("tick,t_ms,late_ms,logic_ms,pad_ms,interval_ms,frames,skipped,render_ms,begin_ms,flip_ms,actors,in_view," +
-				"annot_gen_ms,annot_draw_ms,flush_ms,cursor_ms,selected,prepare_ms,world_ms,widgets_ms");
+				"annot_gen_ms,annot_draw_ms,flush_ms,cursor_ms,selected,prepare_ms,world_ms,widgets_ms," +
+				"actors_ms,traits_ms,effects_ms,synchash_ms,tickrender_ms");
 			var clock = TimeSpan.FromMilliseconds((double)firstMeasuredTick * world.Timestep);
 			Console.WriteLine($"LiveBench: measuring from tick {firstMeasuredTick} (game clock {clock:m\\:ss}) at zoom {zoomUsed:F3}");
 		}
@@ -380,7 +398,9 @@ namespace OpenRA.Support
 				r.Pad.ToString("F2", c), (nextStart - r.Start).ToString("F2", c), r.Frames.ToString(c), r.Skipped.ToString(c),
 				r.Render.ToString("F2", c), r.Begin.ToString("F2", c), r.Flip.ToString("F2", c), r.Actors.ToString(c), r.InView.ToString(c),
 				r.AnnotGen.ToString("F2", c), r.AnnotDraw.ToString("F2", c), r.Flush.ToString("F2", c), r.Cursor.ToString("F2", c), r.Selected.ToString(c),
-				r.Prepare.ToString("F2", c), r.WorldPass.ToString("F2", c), r.Widgets.ToString("F2", c)));
+				r.Prepare.ToString("F2", c), r.WorldPass.ToString("F2", c), r.Widgets.ToString("F2", c),
+				r.TickActors.ToString("F2", c), r.TickTraits.ToString("F2", c), r.TickEffects.ToString("F2", c), r.SyncHash.ToString("F2", c),
+				r.TickRender.ToString("F2", c)));
 		}
 
 		/// <summary>A frame was drawn; the times are what the main thread spent in it, in starting the world pass, and in the hand-off.</summary>
@@ -426,7 +446,16 @@ namespace OpenRA.Support
 				return;
 			}
 
-			desyncFrame = frame;
+			if (desyncFrame < 0)
+				desyncFrame = frame;
+
+			if (ignoreDesync)
+			{
+				if (desyncFrame == frame)
+					Console.WriteLine($"LiveBench: desync at frame {frame}, carrying on (Bench.IgnoreDesync)");
+				return;
+			}
+
 			Finish($"desync at frame {frame}");
 		}
 
@@ -436,7 +465,7 @@ namespace OpenRA.Support
 				return;
 
 			finished = true;
-			finishReason = reason;
+			finishReason = ignoreDesync && desyncFrame >= 0 ? $"{reason}; desync at frame {desyncFrame} ignored" : reason;
 			measureEnd = Now;
 			Console.WriteLine($"LiveBench: finished ({reason})");
 
@@ -514,6 +543,11 @@ namespace OpenRA.Support
 				["logic_mean_ms"] = Mean(r => r.Logic),
 				["logic_p95_ms"] = Percentile(Records.Select(r => r.Logic).OrderBy(x => x).ToList(), 0.95),
 				["pad_mean_ms"] = Mean(r => r.Pad),
+				["actors_mean_ms"] = Mean(r => r.TickActors),
+				["traits_mean_ms"] = Mean(r => r.TickTraits),
+				["effects_mean_ms"] = Mean(r => r.TickEffects),
+				["synchash_mean_ms"] = Mean(r => r.SyncHash),
+				["tickrender_mean_ms"] = Mean(r => r.TickRender),
 				["render_mean_ms"] = Mean(r => r.Render),
 				["begin_mean_ms"] = Mean(r => r.Begin),
 				["flip_mean_ms"] = Mean(r => r.Flip),
@@ -547,7 +581,8 @@ namespace OpenRA.Support
 
 			var line = string.Format(c,
 				"{0,-26} {21,2}ms {1,-16} {2,-5} {3,5} {4,5} {5,4} {6,3} | ticks {7,5} capacity {8,6:F1}% interval {9,5:F1} p95 {10,5:F1} | " +
-				"logic {11,5:F1} pad {12,4:F1} render {13,5:F1} begin {14,4:F1} flip {15,5:F1} | fps {16,5:F1} skipped {17,4} late {18,4:F0}% resets {19} | " +
+				"logic {11,5:F1} (actors {25,4:F1} traits {26,4:F1} effects {27,4:F1} sync {28,4:F1} tickrender {29,4:F1}) pad {12,4:F1} " +
+				"render {13,5:F1} begin {14,4:F1} flip {15,5:F1} | fps {16,5:F1} skipped {17,4} late {18,4:F0}% resets {19} | " +
 				"zoom {22,5:F2} view {23,4:F0}/{24,4:F0} | {20}",
 				name, g.Mode, g.VSync ? "vsync" : "-", g.CapFramerateToGameFps ? "tick" : g.CapFramerate ? g.MaxFramerate.ToString(c) : "-",
 				logicFloorMs > 0 ? "L" + logicFloorMs.ToString("F0", c) : ballastMs > 0 ? "B" + ballastMs.ToString("F0", c) : "-",
@@ -555,7 +590,8 @@ namespace OpenRA.Support
 				n, capacity, summary["interval_mean_ms"], summary["interval_p95_ms"],
 				summary["logic_mean_ms"], summary["pad_mean_ms"], summary["render_mean_ms"], summary["begin_mean_ms"], summary["flip_mean_ms"],
 				summary["fps"], skipped, summary["late_ticks_pct"], resets, finishReason, measureTimestep,
-				zoomUsed, summary["in_view_mean"], summary["actors_mean"]);
+				zoomUsed, summary["in_view_mean"], summary["actors_mean"],
+				summary["actors_mean_ms"], summary["traits_mean_ms"], summary["effects_mean_ms"], summary["synchash_mean_ms"], summary["tickrender_mean_ms"]);
 			File.AppendAllText(Path.Combine(outDir, "summary.txt"), line + "\n");
 			Console.WriteLine(line);
 		}

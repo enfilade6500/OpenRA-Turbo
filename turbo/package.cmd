@@ -3,7 +3,7 @@ rem Assembles the Turbo patch zip from this checkout after "make.cmd all": the t
 rem mod files, laid out as they go into an install, plus the README and TURBO.md.  Run from the checkout root.
 rem The whole-game downloads (Windows portable zip, Linux AppImages) are made by turbo\package.sh on Linux.
 setlocal EnableExtensions
-set "VER=1.0"
+set "VER=1.1"
 set "NAME=OpenRA-Turbo-%VER%-release-20250330"
 set "DIST=turbo-dist\%NAME%\OpenRA"
 if not exist bin\OpenRA.Game.dll ( echo Build first: make.cmd all & exit /b 1 )

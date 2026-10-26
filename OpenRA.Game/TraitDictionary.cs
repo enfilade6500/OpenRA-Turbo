@@ -133,6 +133,11 @@ namespace OpenRA
 			InnerGet<T>().ApplyToAllTimed(action, text);
 		}
 
+		public void SetDormant<T>(Actor actor, T trait, bool dormant)
+		{
+			InnerGet<T>().SetDormant(actor, trait, dormant);
+		}
+
 		interface ITraitContainer
 		{
 			void Add(Actor actor, object trait);
@@ -146,6 +151,10 @@ namespace OpenRA
 			readonly List<Actor> actors = new();
 			readonly List<T> traits = new();
 
+			// PERF: Beside each trait, whether it asked to be left out of ApplyToAllTimed (see World.SetTickDormant); a
+			// list of its own so that the tick loop reads it without touching the trait
+			readonly List<bool> dormant = new();
+
 			public int Queries { get; private set; }
 
 			public void Add(Actor actor, object trait)
@@ -153,6 +162,20 @@ namespace OpenRA
 				var insertIndex = actors.BinarySearchMany(actor.ActorID + 1);
 				actors.Insert(insertIndex, actor);
 				traits.Insert(insertIndex, (T)trait);
+				dormant.Insert(insertIndex, false);
+			}
+
+			public void SetDormant(Actor actor, T trait, bool value)
+			{
+				var index = actors.BinarySearchMany(actor.ActorID);
+				for (; index < actors.Count && actors[index].ActorID == actor.ActorID; index++)
+				{
+					if (ReferenceEquals(traits[index], trait))
+					{
+						dormant[index] = value;
+						return;
+					}
+				}
 			}
 
 			public T Get(Actor actor)
@@ -294,6 +317,7 @@ namespace OpenRA
 				var count = endIndex - startIndex;
 				actors.RemoveRange(startIndex, count);
 				traits.RemoveRange(startIndex, count);
+				dormant.RemoveRange(startIndex, count);
 			}
 
 			public void ApplyToAll(Action<Actor, T> action)
@@ -307,6 +331,9 @@ namespace OpenRA
 				var start = PerfTickLogger.GetTimestamp();
 				for (var i = 0; i < actors.Count; i++)
 				{
+					if (dormant[i])
+						continue;
+
 					var actor = actors[i];
 					var trait = traits[i];
 					var pstart = Support.AggregateProfiler.Now();

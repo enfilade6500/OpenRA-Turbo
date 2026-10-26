@@ -327,7 +327,10 @@ namespace OpenRA.Support
 				if (Game.OrderManager?.Connection is ReplayConnection ended &&
 					(Game.OrderManager.NetFrameNumber >= ended.TickCount || (ended.AllOrdersDelivered && Now - stalledSince > 500)))
 				{
-					var at = $" at net frame {Game.OrderManager.NetFrameNumber} of {ended.TickCount}, world tick {world.WorldTick}";
+					// A game that ended (everyone's objectives settled) pauses its world; the recording usually runs on past that
+					// while the recorder sat on the score screen
+					var at = $" at net frame {Game.OrderManager.NetFrameNumber} of {ended.TickCount}, world tick {world.WorldTick}" +
+						(world.IsGameOver ? ", game over" : "") + (world.Paused ? ", world paused" : "");
 					Finish((Measuring ? "replay ended" : "replay ended before measuring began") + at);
 				}
 

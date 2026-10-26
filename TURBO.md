@@ -162,10 +162,12 @@ the viewer's shroud changed anywhere, or the viewer changed.
 
 Eight Chambers (1.1): an 8-player interior map with 6,576 wall actors, which played at 25 ms a
 tick from the first second on a fast computer. The first 236 ticks of a replay, headless, on this
-machine: 21.8 to 24.2 ms a tick with 1.0, 7.7 to 8.4 with 1.1. What was 3.1 ms of actor ticks is
-1.3; 7.9 ms of trait ticks is 0.3; 4.3 ms of render ticks is 0.1. What remains is mostly the sync
-hash (2.4 ms a tick on average: every actor's synced state every net frame, which is the protocol)
-and the engine's fixed per-tick work.
+machine, back to back: 20.6 ms a tick with 1.0, 6.7 with 1.1 (runs on a busier machine gave 22–24
+and 7.7–8.4). What was 3.1 ms of actor ticks is 1.0; 7.9 ms of trait ticks is 0.2; 4.3 ms of render
+ticks is 0.1. What remains is mostly the sync hash (2.4 ms a tick on average: every actor's synced
+state every net frame, which is the protocol) and the engine's fixed per-tick work. Eighteen
+minutes of the same replay played on past its placeholder-content desync (`Bench.IgnoreDesync`)
+without an exception, logic rising to 15–18 ms a tick as the (divergent) game filled with units.
 
 Headless playback of a server-side replay of an 8-player game on Big Vanilla Pit (57 game
 minutes, 3,300 to 3,600 actors late in the game), on one machine, stock versus this branch, mean

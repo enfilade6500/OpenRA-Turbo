@@ -29,7 +29,7 @@ wall pieces (Eight Chambers) that was 25 ms a tick from the first second. Now:
   synced hashes as running sums, bit-identical to the old walk over every copy;
 - craters waiting under the fog are re-checked only when the fog or the craters changed.
 
-Eight Chambers, first 236 ticks of a replay on the test machine: 22–24 ms a tick with 1.0, 8 with
+Eight Chambers, first 236 ticks of a replay on the test machine: 20.6 ms a tick with 1.0, 6.7 with
 1.1. Maps without thousands of static actors gain less; nothing is lost on any map.
 
 Also: the bench splits the logic tick into its phases (`actors_ms`, `traits_ms`, `effects_ms`,

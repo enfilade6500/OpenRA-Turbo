@@ -298,7 +298,14 @@ namespace OpenRA.Support
 			var ticked = world.WorldTick != lastWorldTick;
 			lastWorldTick = world.WorldTick;
 			if (!ticked)
+			{
+				// A replay that ends mid-game (the recording client left) stops the world ticking without a game over; it is
+				// over for the bench all the same
+				if (Game.OrderManager?.Connection is ReplayConnection ended && Game.OrderManager.NetFrameNumber >= ended.TickCount)
+					Finish(Measuring ? "replay ended" : "replay ended before measuring began");
+
 				return;
+			}
 
 			if (!Measuring)
 			{

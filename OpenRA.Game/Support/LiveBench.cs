@@ -149,6 +149,7 @@ namespace OpenRA.Support
 		const int StartTimeoutMs = 180_000;
 
 		static readonly List<TickRecord> AllRecords = new();
+		static double stalledSince;
 		static double tickStart, pendingLate, measureStart, measureEnd;
 		static int firstMeasuredTick = -1, resets, lastWorldTick;
 		static string finishReason, replayPath, mapTitle;
@@ -317,8 +318,14 @@ namespace OpenRA.Support
 			{
 				// A replay that ends mid-game (the recording client left) stops the world ticking without a game over; it is
 				// over for the bench all the same. The other clients' orders for the last frame or two are usually missing from
-				// the recording, so the world stops a little short of the last recorded frame
-				if (Game.OrderManager?.Connection is ReplayConnection ended && (Game.OrderManager.NetFrameNumber >= ended.TickCount || ended.AllOrdersDelivered))
+				// the recording, so the world stops a little short of the last recorded frame: once the recording has no more
+				// orders to deliver, a world that has not ticked for half a second (a logic pass that found its timestep not
+				// yet elapsed is a shorter, ordinary gap) is not going to
+				if (stalledSince == 0)
+					stalledSince = Now;
+
+				if (Game.OrderManager?.Connection is ReplayConnection ended &&
+					(Game.OrderManager.NetFrameNumber >= ended.TickCount || (ended.AllOrdersDelivered && Now - stalledSince > 500)))
 				{
 					var at = $" at net frame {Game.OrderManager.NetFrameNumber} of {ended.TickCount}, world tick {world.WorldTick}";
 					Finish((Measuring ? "replay ended" : "replay ended before measuring began") + at);
@@ -326,6 +333,8 @@ namespace OpenRA.Support
 
 				return;
 			}
+
+			stalledSince = 0;
 
 			if (!Measuring)
 			{
@@ -741,6 +750,7 @@ namespace OpenRA.Support
 					Queue = om.OrderQueueLength,
 					Scale = om.TickScale
 				};
+				r.AddLogicPhases();
 				stalls = 0;
 				paused = 0;
 				Records.Add(r);
@@ -800,7 +810,8 @@ namespace OpenRA.Support
 				name = $"live-{DateTime.Now:yyyyMMdd-HHmmss}-{safeMap}";
 				csv = new StreamWriter(Path.Combine(outDir, name + ".csv"), false, Encoding.ASCII);
 				csv.WriteLine("tick,t_ms,late_ms,logic_ms,pad_ms,interval_ms,frames,skipped,render_ms,begin_ms,flip_ms,actors,in_view," +
-					"annot_gen_ms,annot_draw_ms,flush_ms,cursor_ms,selected,prepare_ms,world_ms,widgets_ms,zoom,stalls,paused,netframe,queue,scale");
+					"annot_gen_ms,annot_draw_ms,flush_ms,cursor_ms,selected,prepare_ms,world_ms,widgets_ms,zoom,stalls,paused,netframe,queue,scale," +
+					"actors_ms,traits_ms,effects_ms,synchash_ms,tickrender_ms,gc_gen,gc_pause_ms");
 				Console.WriteLine($"LiveBench: recording {name} ({connection}, {players} players, {timestep} ms ticks)");
 			}
 
@@ -813,7 +824,9 @@ namespace OpenRA.Support
 					r.Render.ToString("F2", c), r.Begin.ToString("F2", c), r.Flip.ToString("F2", c), r.Actors.ToString(c), r.InView.ToString(c),
 					r.AnnotGen.ToString("F2", c), r.AnnotDraw.ToString("F2", c), r.Flush.ToString("F2", c), r.Cursor.ToString("F2", c), r.Selected.ToString(c),
 					r.Prepare.ToString("F2", c), r.WorldPass.ToString("F2", c), r.Widgets.ToString("F2", c),
-					r.Zoom.ToString("F3", c), r.Stalls.ToString(c), r.Paused.ToString(c), r.NetFrame.ToString(c), r.Queue.ToString(c), r.Scale.ToString("F3", c)));
+					r.Zoom.ToString("F3", c), r.Stalls.ToString(c), r.Paused.ToString(c), r.NetFrame.ToString(c), r.Queue.ToString(c), r.Scale.ToString("F3", c),
+					r.TickActors.ToString("F2", c), r.TickTraits.ToString("F2", c), r.TickEffects.ToString("F2", c), r.SyncHash.ToString("F2", c),
+					r.TickRender.ToString("F2", c), r.GcGen.ToString(c), r.GcPause.ToString("F2", c)));
 			}
 
 			public static void Finish(string reason)
@@ -884,6 +897,15 @@ namespace OpenRA.Support
 					["logic_p50_ms"] = Percentile(logic, 0.5),
 					["logic_p95_ms"] = Percentile(logic, 0.95),
 					["logic_max_ms"] = logic.Count > 0 ? logic[^1] : 0,
+					["actors_mean_ms"] = Mean(r => r.TickActors),
+					["traits_mean_ms"] = Mean(r => r.TickTraits),
+					["effects_mean_ms"] = Mean(r => r.TickEffects),
+					["synchash_mean_ms"] = Mean(r => r.SyncHash),
+					["tickrender_mean_ms"] = Mean(r => r.TickRender),
+					["gc_count"] = Records.Count(r => r.GcGen >= 0),
+					["gc_gen2_count"] = Records.Count(r => r.GcGen >= 2),
+					["gc_pause_total_ms"] = Records.Sum(r => r.GcPause),
+					["gc_pause_max_ms"] = n > 0 ? Records.Max(r => r.GcPause) : 0,
 					["render_mean_ms"] = Mean(r => r.Render),
 					["render_per_frame_ms"] = frames > 0 ? (render - begin) / frames : 0,
 					["begin_mean_ms"] = Mean(r => r.Begin),
@@ -935,11 +957,12 @@ namespace OpenRA.Support
 				var line = string.Format(c,
 					"{0,-40} {1,2}ms {2,-16} {3,-5} {4,4} {5,2}p | {6,6:F1} min speed {7,5:F1}% stalls {8,4:F1}% paused {9,4} | logic {10,5:F1} p95 {11,5:F1} max {12,5:F0} " +
 					"| frame {13,4:F1} begin {14,4:F1} flip {15,4:F1} fps {16,4:F0} late {17,3:F0}% resets {18} " +
-					"| slowed {19,4:F1}% catchup {20,4:F1}% queue {21,4:F1} | zoom {22,4:F2} view {23,4:F0}/{24,4:F0} | {25}",
+					"| slowed {19,4:F1}% catchup {20,4:F1}% queue {21,4:F1} | gc {26} gen2 {27} pause {28,5:F0} max {29,4:F0} | zoom {22,4:F2} view {23,4:F0}/{24,4:F0} | {25}",
 					name, timestep, g.Mode, g.VSync ? "vsync" : "-", g.CapFramerateToGameFps ? "tick" : g.CapFramerate ? g.MaxFramerate.ToString(c) : "-", players,
 					wall / 60000, summary["realised_speed_pct"], summary["stall_pct"], pausedTicks, summary["logic_p50_ms"], summary["logic_p95_ms"], summary["logic_max_ms"],
 					summary["render_per_frame_ms"], summary["begin_mean_ms"], summary["flip_mean_ms"], summary["fps"], summary["late_ticks_pct"], resets,
-					summary["slowed_pct"], summary["catching_up_pct"], summary["queue_mean"], summary["zoom_mean"], summary["in_view_mean"], summary["actors_mean"], reason);
+					summary["slowed_pct"], summary["catching_up_pct"], summary["queue_mean"], summary["zoom_mean"], summary["in_view_mean"], summary["actors_mean"], reason,
+					summary["gc_count"], summary["gc_gen2_count"], summary["gc_pause_total_ms"], summary["gc_pause_max_ms"]);
 				File.AppendAllText(Path.Combine(outDir, "summary.txt"), line + "\n");
 				Console.WriteLine(line);
 			}

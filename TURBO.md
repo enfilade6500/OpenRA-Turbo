@@ -212,7 +212,8 @@ from a checkout, or the same arguments to `OpenRA.exe` / `RedAlert.exe` in an in
 were copied into. The game plays exactly as normal and writes, for
 every multiplayer or skirmish game of the session, `live-<time>-<map>.csv` with one row per tick
 — logic ms, how late the tick started, frames drawn and frames skipped, render ms, actors alive
-and in view, the server's tick scale, stalls — plus a `.json` summary and a line in
+and in view, the server's tick scale, stalls, the logic phases and any garbage-collection pause
+— plus a `.json` summary and a line in
 `summary.txt`. Those files are how to see what this build does on a given computer in a given
 game, and what a slow computer is actually short of. `Bench.NoFrameSkip=true` records a game
 with a frame after every tick, as stock draws, for comparison. On a test map, `Bench.Select=all`

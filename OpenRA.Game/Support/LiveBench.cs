@@ -32,8 +32,9 @@ namespace OpenRA.Support
 	/// Launch arguments:
 	///   Bench.Out=dir          results directory (turns the bench on)
 	///   Bench.Name=name        file name for this run (default: bench)
-	///   Bench.WarpTo=m:ss      game time to skip at full speed, without frames, before measuring (default 0)
-	///   Bench.Duration=s       game seconds to measure, then exit (default: to the end of the replay)
+	///   Bench.WarpTo=m:ss      game time to skip at full speed, without frames, before measuring (default 0); game time is
+	///                          counted at 25 ticks a second, or give ticks exactly: Bench.WarpTo=11190t
+	///   Bench.Duration=s       game seconds to measure, then exit (default: to the end of the replay); or ticks: 3000t
 	///   Bench.LogicMs=ms       pad every logic tick to at least this long, to behave like a slower computer (default 0)
 	///   Bench.Ballast=ms       add this to every logic tick (default 0)
 	///   Bench.IgnoreDesync=true keep going when the replay's sync hashes stop matching (placeholder content, or a build
@@ -248,6 +249,10 @@ namespace OpenRA.Support
 		/// <summary>"90", "1:30" or "1:30.5" in game seconds, as a tick count at 40 ms per tick.</summary>
 		static int ParseGameTime(string s)
 		{
+			// "11190t": a tick count, exact whatever the game speed; otherwise m:ss of game clock at 25 ticks a second
+			if (s.EndsWith("t", StringComparison.OrdinalIgnoreCase))
+				return int.Parse(s[..^1], CultureInfo.InvariantCulture);
+
 			var parts = s.Split(':');
 			var seconds = 0f;
 			foreach (var p in parts)

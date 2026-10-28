@@ -19,6 +19,7 @@ using System.Text;
 using System.Threading;
 using OpenRA.Graphics;
 using OpenRA.Network;
+using OpenRA.Traits;
 using OpenRA.Widgets;
 
 namespace OpenRA.Support
@@ -92,6 +93,43 @@ namespace OpenRA.Support
 			public double Render, Begin, Flip;
 			public double AnnotGen, AnnotDraw, Flush, Cursor, Prepare, WorldPass, Widgets;
 			public int Actors, InView, Selected;
+
+			// What the load is made of: actors with something to do this tick (moving, attacking, building), actors that
+			// can move at all (units, as against buildings, walls and trees), actors in the air, effects in flight
+			// (projectiles, explosions, smoke) and players still in the game
+			public int Busy, Mobile, Air, Effects, PlayersAlive;
+
+			/// <summary>Counts the world's load for this tick; one pass over the actors, after the logic time is taken.</summary>
+			public void AddLoad(World world)
+			{
+				Busy = world.BusyActors;
+				Effects = world.EffectCount;
+				var mobile = 0; var air = 0; var all = 0;
+				foreach (var a in world.Actors)
+				{
+					all++;
+					if (!mobileByInfo.TryGetValue(a.Info, out var m))
+						mobileByInfo[a.Info] = m = a.Info.HasTraitInfo<IMoveInfo>();
+
+					if (m)
+					{
+						mobile++;
+						if (a.CenterPosition.Z > 0)
+							air++;
+					}
+				}
+
+				Actors = all;
+				Mobile = mobile;
+				Air = air;
+				var alive = 0;
+				foreach (var p in world.Players)
+					if (p.Playable && p.WinState == WinState.Undefined)
+						alive++;
+				PlayersAlive = alive;
+			}
+
+			static readonly Dictionary<ActorInfo, bool> mobileByInfo = new();
 
 			// Where the logic tick went: the actors' own ticks (activities, idle notifications), the ITick traits, the effects,
 			// the sync hash, and the once-per-tick render-state pass (ITickRender, run with the frame), from the engine's own timers
@@ -372,10 +410,10 @@ namespace OpenRA.Support
 				Late = pendingLate,
 				Logic = logic,
 				Pad = Math.Max(0, target - logic),
-				Actors = world.Actors.Count(),
 				Selected = world.Selection.Actors.Count
 			};
 			current.AddLogicPhases();
+			current.AddLoad(world);
 
 			// Keep the camera where it was put, whatever the mouse does, and count what the frame has to draw: the actors the
 			// renderer picks for the viewport
@@ -433,7 +471,7 @@ namespace OpenRA.Support
 			csv = new StreamWriter(Path.Combine(outDir, name + ".csv"), false, Encoding.ASCII);
 			csv.WriteLine("tick,t_ms,late_ms,logic_ms,pad_ms,interval_ms,frames,skipped,render_ms,begin_ms,flip_ms,actors,in_view," +
 				"annot_gen_ms,annot_draw_ms,flush_ms,cursor_ms,selected,prepare_ms,world_ms,widgets_ms," +
-				"actors_ms,traits_ms,effects_ms,synchash_ms,tickrender_ms,gc_gen,gc_pause_ms");
+				"actors_ms,traits_ms,effects_ms,synchash_ms,tickrender_ms,gc_gen,gc_pause_ms,busy,mobile,air,effects,players_alive");
 			var clock = TimeSpan.FromMilliseconds((double)firstMeasuredTick * world.Timestep);
 			Console.WriteLine($"LiveBench: measuring from tick {firstMeasuredTick} (game clock {clock:m\\:ss}) at zoom {zoomUsed:F3}");
 		}
@@ -448,7 +486,8 @@ namespace OpenRA.Support
 				r.AnnotGen.ToString("F2", c), r.AnnotDraw.ToString("F2", c), r.Flush.ToString("F2", c), r.Cursor.ToString("F2", c), r.Selected.ToString(c),
 				r.Prepare.ToString("F2", c), r.WorldPass.ToString("F2", c), r.Widgets.ToString("F2", c),
 				r.TickActors.ToString("F2", c), r.TickTraits.ToString("F2", c), r.TickEffects.ToString("F2", c), r.SyncHash.ToString("F2", c),
-				r.TickRender.ToString("F2", c), r.GcGen.ToString(c), r.GcPause.ToString("F2", c)));
+				r.TickRender.ToString("F2", c), r.GcGen.ToString(c), r.GcPause.ToString("F2", c),
+				r.Busy.ToString(c), r.Mobile.ToString(c), r.Air.ToString(c), r.Effects.ToString(c), r.PlayersAlive.ToString(c)));
 		}
 
 		/// <summary>A frame was drawn; the times are what the main thread spent in it, in starting the world pass, and in the hand-off.</summary>
@@ -580,6 +619,12 @@ namespace OpenRA.Support
 				["zoom_arg"] = zoomToMap ? "map" : zoom > 0 ? zoom.ToString("F3", c) : "",
 				["viewport_distance"] = g.ViewportDistance.ToString(),
 				["actors_mean"] = Mean(r => r.Actors),
+				["actors_max"] = n > 0 ? Records.Max(r => r.Actors) : 0,
+				["busy_mean"] = Mean(r => r.Busy),
+				["busy_max"] = n > 0 ? Records.Max(r => r.Busy) : 0,
+				["mobile_max"] = n > 0 ? Records.Max(r => r.Mobile) : 0,
+				["air_max"] = n > 0 ? Records.Max(r => r.Air) : 0,
+				["effects_max"] = n > 0 ? Records.Max(r => r.Effects) : 0,
 				["in_view_mean"] = Mean(r => r.InView),
 				["ticks"] = n,
 				["first_tick"] = firstMeasuredTick + SettleTicks,
@@ -663,7 +708,8 @@ namespace OpenRA.Support
 			static string name, mapTitle, connection;
 			static int timestep, players;
 			static double start, end;
-			static int lastTick = -1, firstTick, stalls, paused, resets, desyncFrame = -1, lastActors, lastInView;
+			static int lastTick = -1, firstTick, stalls, paused, resets, desyncFrame = -1, lastInView;
+			static TickRecord lastLoad;
 			static readonly List<TickRecord> Records = new();
 
 			public static void AfterLogic(World w, WorldRenderer wr)
@@ -732,10 +778,7 @@ namespace OpenRA.Support
 
 				// What the frame has to draw, sampled every fifth tick to keep the recorder's own cost negligible
 				if (wr != null && w.WorldTick % 5 == 0)
-				{
-					lastActors = w.Actors.Count();
 					lastInView = w.ScreenMap.RenderableActorsInBox(wr.Viewport.TopLeft, wr.Viewport.BottomRight).Count();
-				}
 
 				var r = new TickRecord
 				{
@@ -743,7 +786,6 @@ namespace OpenRA.Support
 					Start = tickStart,
 					Late = pendingLate,
 					Logic = Now - tickStart,
-					Actors = lastActors,
 					InView = lastInView,
 					Selected = w.Selection.Actors.Count,
 					Zoom = wr?.Viewport.Zoom ?? 0,
@@ -754,6 +796,17 @@ namespace OpenRA.Support
 					Scale = om.TickScale
 				};
 				r.AddLogicPhases();
+				if (w.WorldTick % 5 == 0 || lastLoad == null)
+				{
+					r.AddLoad(w);
+					lastLoad = r;
+				}
+				else
+				{
+					r.Actors = lastLoad.Actors; r.Busy = w.BusyActors; r.Effects = w.EffectCount;
+					r.Mobile = lastLoad.Mobile; r.Air = lastLoad.Air; r.PlayersAlive = lastLoad.PlayersAlive;
+				}
+
 				stalls = 0;
 				paused = 0;
 				Records.Add(r);
@@ -805,7 +858,8 @@ namespace OpenRA.Support
 				firstTick = w.WorldTick;
 				stalls = paused = resets = 0;
 				desyncFrame = -1;
-				lastActors = lastInView = 0;
+				lastInView = 0;
+				lastLoad = null;
 				Records.Clear();
 				start = Now;
 
@@ -814,7 +868,7 @@ namespace OpenRA.Support
 				csv = new StreamWriter(Path.Combine(outDir, name + ".csv"), false, Encoding.ASCII);
 				csv.WriteLine("tick,t_ms,late_ms,logic_ms,pad_ms,interval_ms,frames,skipped,render_ms,begin_ms,flip_ms,actors,in_view," +
 					"annot_gen_ms,annot_draw_ms,flush_ms,cursor_ms,selected,prepare_ms,world_ms,widgets_ms,zoom,stalls,paused,netframe,queue,scale," +
-					"actors_ms,traits_ms,effects_ms,synchash_ms,tickrender_ms,gc_gen,gc_pause_ms");
+					"actors_ms,traits_ms,effects_ms,synchash_ms,tickrender_ms,gc_gen,gc_pause_ms,busy,mobile,air,effects,players_alive");
 				Console.WriteLine($"LiveBench: recording {name} ({connection}, {players} players, {timestep} ms ticks)");
 			}
 
@@ -829,7 +883,8 @@ namespace OpenRA.Support
 					r.Prepare.ToString("F2", c), r.WorldPass.ToString("F2", c), r.Widgets.ToString("F2", c),
 					r.Zoom.ToString("F3", c), r.Stalls.ToString(c), r.Paused.ToString(c), r.NetFrame.ToString(c), r.Queue.ToString(c), r.Scale.ToString("F3", c),
 					r.TickActors.ToString("F2", c), r.TickTraits.ToString("F2", c), r.TickEffects.ToString("F2", c), r.SyncHash.ToString("F2", c),
-					r.TickRender.ToString("F2", c), r.GcGen.ToString(c), r.GcPause.ToString("F2", c)));
+					r.TickRender.ToString("F2", c), r.GcGen.ToString(c), r.GcPause.ToString("F2", c),
+				r.Busy.ToString(c), r.Mobile.ToString(c), r.Air.ToString(c), r.Effects.ToString(c), r.PlayersAlive.ToString(c)));
 			}
 
 			public static void Finish(string reason)
@@ -935,6 +990,12 @@ namespace OpenRA.Support
 					["zoom_mean"] = Mean(r => r.Zoom),
 					["in_view_mean"] = Mean(r => r.InView),
 					["actors_mean"] = Mean(r => r.Actors),
+					["actors_max"] = n > 0 ? Records.Max(r => r.Actors) : 0,
+					["busy_mean"] = Mean(r => r.Busy),
+					["busy_max"] = n > 0 ? Records.Max(r => r.Busy) : 0,
+					["mobile_max"] = n > 0 ? Records.Max(r => r.Mobile) : 0,
+					["air_max"] = n > 0 ? Records.Max(r => r.Air) : 0,
+					["effects_max"] = n > 0 ? Records.Max(r => r.Effects) : 0,
 					["desync_frame"] = desyncFrame,
 				};
 

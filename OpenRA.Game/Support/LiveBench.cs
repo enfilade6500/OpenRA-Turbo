@@ -95,20 +95,22 @@ namespace OpenRA.Support
 			public double AnnotGen, AnnotDraw, Flush, Cursor, Prepare, WorldPass, Widgets;
 			public int Actors, InView, Selected;
 
-			// What the load is made of: actors with something to do this tick (moving, attacking, building), actors that
+			// What the load is made of: actors with an activity (moving, attacking, building, producing), actors that
 			// can move at all (units, as against buildings, walls and trees), actors in the air, effects in flight
-			// (projectiles, explosions, smoke) and players still in the game
+			// (projectiles, explosions, smoke) and players still in the game. Counted the same way in every build.
 			public int Busy, Mobile, Air, Effects, PlayersAlive;
 
 			/// <summary>Counts the world's load for this tick; one pass over the actors, after the logic time is taken.</summary>
 			public void AddLoad(World world)
 			{
-				Busy = world.BusyActors;
-				Effects = world.EffectCount;
-				var mobile = 0; var air = 0; var all = 0;
+				Effects = world.Effects.Count();
+				var busy = 0; var mobile = 0; var air = 0; var all = 0;
 				foreach (var a in world.Actors)
 				{
 					all++;
+					if (a.CurrentActivity != null)
+						busy++;
+
 					if (!mobileByInfo.TryGetValue(a.Info, out var m))
 						mobileByInfo[a.Info] = m = a.Info.HasTraitInfo<IMoveInfo>();
 
@@ -121,6 +123,7 @@ namespace OpenRA.Support
 				}
 
 				Actors = all;
+				Busy = busy;
 				Mobile = mobile;
 				Air = air;
 				var alive = 0;
@@ -808,7 +811,7 @@ namespace OpenRA.Support
 				}
 				else
 				{
-					r.Actors = lastLoad.Actors; r.Busy = w.BusyActors; r.Effects = w.EffectCount;
+					r.Actors = lastLoad.Actors; r.Busy = lastLoad.Busy; r.Effects = lastLoad.Effects;
 					r.Mobile = lastLoad.Mobile; r.Air = lastLoad.Air; r.PlayersAlive = lastLoad.PlayersAlive;
 				}
 

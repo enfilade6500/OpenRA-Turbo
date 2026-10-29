@@ -452,7 +452,6 @@ namespace OpenRA
 				WorldTick++;
 				Support.AggregateProfiler.BeginTick(WorldTick);
 
-				var busy = 0;
 				using (new PerfSample("tick_actors"))
 					foreach (var a in actors.Values)
 					{
@@ -460,7 +459,6 @@ namespace OpenRA
 						if (!a.NeedsTick)
 							continue;
 
-						busy++;
 						var pstart = Support.AggregateProfiler.Now();
 						var activity = a.CurrentActivity;
 						a.Tick();
@@ -475,8 +473,6 @@ namespace OpenRA
 							Support.AggregateProfiler.Add("ActorTick:" + a.Info.Name, pstart);
 						}
 					}
-
-				BusyActors = busy;
 
 				using (new PerfSample("tick_traits"))
 					ApplyToActorsWithTraitTimed<ITick>((actor, trait) => trait.Tick(actor), "Trait");
@@ -504,11 +500,6 @@ namespace OpenRA
 
 		public IEnumerable<Actor> Actors => actors.Values;
 		public IEnumerable<IEffect> Effects => effects;
-
-		/// <summary>How many actors had something to do in the last tick (an activity, or an idle hook that wants ticks):
-		/// the moving, attacking, building and producing, as against the standing and the static. For the bench.</summary>
-		public int BusyActors { get; private set; }
-		public int EffectCount => effects.Count;
 		public IEnumerable<IEffect> UnpartitionedEffects => unpartitionedEffects;
 		public IEnumerable<ISync> SyncedEffects => syncedEffects;
 

@@ -202,6 +202,8 @@ namespace OpenRA
 			using (new PerfTimer("LoadComplete"))
 				OrderManager.World.LoadComplete(worldRenderer);
 
+			Support.LiveBench.OnWorldLoaded(OrderManager.World);
+
 			// Proactively collect memory during loading to reduce peak memory.
 			GC.Collect();
 
@@ -349,6 +351,7 @@ namespace OpenRA
 			}
 
 			InitializeSettings(args);
+			Support.LiveBench.Configure(args);
 
 			Log.AddChannel("perf", "perf.log");
 			Log.AddChannel("debug", "debug.log");
@@ -412,7 +415,8 @@ namespace OpenRA
 					launchPath = launchPath[1..^1];
 
 				// Metadata registration requires an explicit launch path
-				if (launchPath != null)
+				// (a benchmark copy of the game must not register itself over the player's installation)
+				if (launchPath != null && !Support.LiveBench.Active)
 					ExternalMods.Register(Mods[modID], launchPath, launchArgs, ModRegistration.User);
 
 				ExternalMods.ClearInvalidRegistrations(ModRegistration.User);
@@ -508,6 +512,11 @@ namespace OpenRA
 			PerfHistory.Items["render_widgets"].HasNormalTick = false;
 			PerfHistory.Items["render_flip"].HasNormalTick = false;
 			PerfHistory.Items["terrain_lighting"].HasNormalTick = false;
+			PerfHistory.Items["render_annot_gen"].HasNormalTick = false;
+			PerfHistory.Items["render_annot_draw"].HasNormalTick = false;
+			PerfHistory.Items["render_flush"].HasNormalTick = false;
+			PerfHistory.Items["render_cursor"].HasNormalTick = false;
+			PerfHistory.Items["render_prepare"].HasNormalTick = false;
 
 			JoinLocal();
 
@@ -677,6 +686,8 @@ namespace OpenRA
 
 		static void RenderTick()
 		{
+			var benchStart = Support.LiveBench.Active ? Stopwatch.GetTimestamp() : 0L;
+			long benchBegin = 0, benchFlip = 0;
 			using (new PerfSample("render"))
 			{
 				++RenderFrame;
@@ -702,10 +713,14 @@ namespace OpenRA
 				// Use worldRenderer.World instead of OrderManager.World to avoid a rendering mismatch while processing orders
 				if (worldRenderer != null && !worldRenderer.World.IsLoadingGameSave)
 				{
+					var t0 = benchStart != 0 ? Stopwatch.GetTimestamp() : 0L;
 					Renderer.BeginWorld(worldRenderer.Viewport.Rectangle);
+					if (t0 != 0)
+						benchBegin = Stopwatch.GetTimestamp() - t0;
 					Sound.SetListenerPosition(worldRenderer.Viewport.CenterPosition);
 					using (new PerfSample("render_world"))
-						worldRenderer.Draw();
+						for (var i = 0; i < Support.LiveBench.RenderRepeat; i++)
+							worldRenderer.Draw();
 				}
 
 				using (new PerfSample("render_widgets"))
@@ -713,7 +728,8 @@ namespace OpenRA
 					Renderer.BeginUI();
 
 					if (worldRenderer != null && !worldRenderer.World.IsLoadingGameSave)
-						worldRenderer.DrawAnnotations();
+						using (new PerfSample("render_annot_draw"))
+							worldRenderer.DrawAnnotations();
 
 					Ui.Draw();
 
@@ -723,14 +739,20 @@ namespace OpenRA
 							Cursor.SetCursor(null);
 						else
 						{
-							Cursor.SetCursor(Ui.Root.GetCursorOuter(Viewport.LastMousePos) ?? "default");
+							using (new PerfSample("render_cursor"))
+								Cursor.SetCursor(Ui.Root.GetCursorOuter(Viewport.LastMousePos) ?? "default");
 							Cursor.Render(Renderer);
 						}
 					}
 				}
 
 				using (new PerfSample("render_flip"))
+				{
+					var t0 = benchStart != 0 ? Stopwatch.GetTimestamp() : 0L;
 					Renderer.EndFrame(new DefaultInputHandler(OrderManager.World));
+					if (t0 != 0)
+						benchFlip = Stopwatch.GetTimestamp() - t0;
+				}
 
 				if (takeScreenshot)
 				{
@@ -745,6 +767,17 @@ namespace OpenRA
 			PerfHistory.Items["render_widgets"].Tick();
 			PerfHistory.Items["render_flip"].Tick();
 			PerfHistory.Items["terrain_lighting"].Tick();
+			PerfHistory.Items["render_annot_gen"].Tick();
+			PerfHistory.Items["render_annot_draw"].Tick();
+			PerfHistory.Items["render_flush"].Tick();
+			PerfHistory.Items["render_cursor"].Tick();
+			PerfHistory.Items["render_prepare"].Tick();
+
+			if (benchStart != 0)
+			{
+				var ms = 1000.0 / Stopwatch.Frequency;
+				Support.LiveBench.AfterRender((Stopwatch.GetTimestamp() - benchStart) * ms, benchBegin * ms, benchFlip * ms);
+			}
 		}
 
 		static void Loop()
@@ -786,6 +819,11 @@ namespace OpenRA
 			// than this, then that limit will be used.
 			const int MinReplayFps = 10;
 
+			// A developer (or the bench, headless) asking for at most this many frames a second whatever the load:
+			// Debug.ForceFramerate. 0, the default, changes nothing.
+			var forceFramerate = Settings.Debug.ForceFramerate;
+			var minReplayFps = forceFramerate > 0 ? Math.Min(MinReplayFps, forceFramerate) : MinReplayFps;
+
 			// Timestamps for when the next logic and rendering should run
 			var nextLogic = RunTime;
 			var nextRender = RunTime;
@@ -809,6 +847,9 @@ namespace OpenRA
 					renderInterval = 1000 / maxFramerate;
 				}
 
+				if (forceFramerate > 0)
+					renderInterval = Math.Max(renderInterval, 1000 / forceFramerate);
+
 				// Tick as fast as possible while restoring game saves, capping rendering at 5 FPS
 				if (OrderManager.World != null && OrderManager.World.IsLoadingGameSave)
 				{
@@ -820,7 +861,10 @@ namespace OpenRA
 
 				// If the logic has fallen behind too much, skip it and catch up
 				if (now - nextLogic > MaxLogicTicksBehind)
+				{
 					nextLogic = now;
+					Support.LiveBench.NoteLogicReset();
+				}
 
 				// When's the next update (logic or render)
 				var nextUpdate = Math.Min(nextLogic, nextRender);
@@ -830,12 +874,15 @@ namespace OpenRA
 
 					if (now >= nextLogic && !renderBeforeNextTick)
 					{
+						Support.LiveBench.BeforeLogic(now - nextLogic);
 						nextLogic += logicInterval;
 
 						LogicTick();
+						Support.LiveBench.AfterLogic(OrderManager.World, worldRenderer);
 
-						// Force at least one render per tick during regular gameplay
-						if (OrderManager.World != null && !OrderManager.World.IsLoadingGameSave && !OrderManager.World.IsReplay)
+						// Force at least one render per tick during regular gameplay (and in a replay the bench is
+						// measuring as if it were one), unless a frame rate is being forced
+						if (OrderManager.World != null && !OrderManager.World.IsLoadingGameSave && (!OrderManager.World.IsReplay || Support.LiveBench.Measuring) && forceFramerate == 0)
 							renderBeforeNextTick = true;
 					}
 
@@ -850,7 +897,7 @@ namespace OpenRA
 						// allowed between screen updates.
 						// We do this before rendering to include the time rendering takes
 						// in this interval.
-						var maxRenderInterval = Math.Max(1000 / MinReplayFps, renderInterval);
+						var maxRenderInterval = Math.Max(1000 / minReplayFps, renderInterval);
 						forcedNextRender = now + maxRenderInterval;
 
 						RenderTick();
@@ -900,6 +947,7 @@ namespace OpenRA
 			Sound.Dispose();
 			Renderer.Dispose();
 
+			Support.LiveBench.OnExit();
 			OnQuit();
 
 			return state;

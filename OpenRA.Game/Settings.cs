@@ -142,6 +142,9 @@ namespace OpenRA
 		[Desc("Number of samples to average over when calculating tick and render times.")]
 		public int Samples = 25;
 
+		[Desc("Draw at most this many frames per second whatever the load, to try out what a low frame rate is like. 0: off.")]
+		public int ForceFramerate = 0;
+
 		[Desc("Check whether a newer version is available online.")]
 		public bool CheckVersion = true;
 
@@ -368,6 +371,10 @@ namespace OpenRA
 
 		public void Save()
 		{
+			// A benchmark run is given its settings on the command line and must not write them into the player's file
+			if (Support.LiveBench.Active)
+				return;
+
 			var yamlCacheBuilder = yamlCache.ConvertAll(n => new MiniYamlNodeBuilder(n));
 			foreach (var kv in Sections)
 			{

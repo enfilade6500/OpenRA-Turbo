@@ -450,25 +450,48 @@ namespace OpenRA
 			if (!Paused && (Type != WorldType.Shellmap || !gameSettings.PauseShellmap || WorldTick == 0))
 			{
 				WorldTick++;
+				Support.AggregateProfiler.BeginTick(WorldTick);
 
 				using (new PerfSample("tick_actors"))
 					foreach (var a in actors.Values)
+					{
+						var pstart = Support.AggregateProfiler.Now();
+						var activity = a.CurrentActivity;
 						a.Tick();
+						if (pstart != 0)
+						{
+							// Attribute the actor's tick to its top-level activity, to the innermost child activity that was
+							// actually running (a LeaveProduction or AttackMove is usually a Move underneath) and to the actor type
+							var leaf = activity?.LeafActivity;
 
-				ApplyToActorsWithTraitTimed<ITick>((actor, trait) => trait.Tick(actor), "Trait");
+							Support.AggregateProfiler.Add("Activity:" + (activity?.GetType().Name ?? "idle"), pstart);
+							Support.AggregateProfiler.Add("Leaf:" + (leaf?.GetType().Name ?? "idle"), pstart);
+							Support.AggregateProfiler.Add("ActorTick:" + a.Info.Name, pstart);
+						}
+					}
 
-				effects.DoTimed(e => e.Tick(this), "Effect");
+				using (new PerfSample("tick_traits"))
+					ApplyToActorsWithTraitTimed<ITick>((actor, trait) => trait.Tick(actor), "Trait");
+
+				using (new PerfSample("tick_effects"))
+					effects.DoTimed(e => e.Tick(this), "Effect");
+
+				Support.AggregateProfiler.Flush(WorldTick, actors.Count, effects.Count);
 			}
 
-			while (frameEndActions.Count != 0)
-				frameEndActions.Dequeue()(this);
+			using (new PerfSample("tick_frameend"))
+				while (frameEndActions.Count != 0)
+					frameEndActions.Dequeue()(this);
 		}
 
 		// For things that want to update their render state once per tick, ignoring pause state
 		public void TickRender(WorldRenderer wr)
 		{
-			ApplyToActorsWithTraitTimed<ITickRender>((actor, trait) => trait.TickRender(wr, actor), "Render");
-			ScreenMap.TickRender();
+			using (new PerfSample("tick_render"))
+			{
+				ApplyToActorsWithTraitTimed<ITickRender>((actor, trait) => trait.TickRender(wr, actor), "Render");
+				ScreenMap.TickRender();
+			}
 		}
 
 		public IEnumerable<Actor> Actors => actors.Values;
@@ -491,7 +514,7 @@ namespace OpenRA
 
 		public int SyncHash()
 		{
-			// using (new PerfSample("synchash"))
+			using (new PerfSample("synchash"))
 			{
 				var n = 0;
 				var ret = 0;

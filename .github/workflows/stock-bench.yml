@@ -1,0 +1,63 @@
+name: stock-bench
+
+# release-20250330 plus the client bench (STOCK-BENCH.md). Every push builds it and keeps the files with the run;
+# a tag stock-bench-<n> also puts them on a draft release, so the control build has a stable download.
+
+on:
+  push:
+    branches: ['stock-bench']
+    tags: ['stock-bench-*']
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    name: Build, test, package
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Clone
+        uses: actions/checkout@v4
+
+      - name: Install .NET 6.0
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '6.0.x'
+
+      - name: Build
+        run: make all
+
+      - name: Test mods
+        run: make TREAT_WARNINGS_AS_ERRORS=true test
+
+      - name: Unit tests
+        run: make tests
+
+      - name: Package
+        run: |
+          name="OpenRA-stock-bench-${GITHUB_SHA::7}-release-20250330"
+          mkdir -p "dist/$name/OpenRA"
+          cp bin/OpenRA.Game.dll bin/OpenRA.Mods.Common.dll bin/OpenRA.Mods.Cnc.dll "dist/$name/OpenRA/"
+          cp bench-replay.cmd bench-suite.cmd "dist/$name/OpenRA/"
+          cp STOCK-BENCH.md "dist/$name/"
+          (cd dist && zip -q -r -9 "$name.zip" "$name" && sha256sum "$name.zip" > SHA256SUMS.txt && cat SHA256SUMS.txt)
+
+      - name: Keep the files with this run
+        uses: actions/upload-artifact@v4
+        with:
+          name: OpenRA-stock-bench-${{ github.sha }}
+          path: |
+            dist/*.zip
+            dist/SHA256SUMS.txt
+
+      - name: Draft the release
+        if: startsWith(github.ref, 'refs/tags/stock-bench-')
+        uses: softprops/action-gh-release@v2
+        with:
+          draft: true
+          name: stock-bench ${{ github.ref_name }}
+          body_path: STOCK-BENCH.md
+          files: |
+            dist/*.zip
+            dist/SHA256SUMS.txt

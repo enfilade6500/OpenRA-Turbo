@@ -64,6 +64,9 @@ namespace OpenRA.Network
 		int sentOrdersFrame = 0;
 		float tickScale = 1f;
 
+		/// <summary>The tick scale the server last asked for (1 = the game speed's own timestep). Read by the client bench.</summary>
+		public float TickScale => tickScale;
+
 		/// <summary>
 		/// Indicates if the world state of other players or a replay has diverged from the local state.
 		/// The game cannot reliably continue in this condition and is unusable.
@@ -86,6 +89,13 @@ namespace OpenRA.Network
 		{
 			if (IsOutOfSync)
 				return;
+
+			// The bench may want the replay to play on regardless (Bench.IgnoreDesync)
+			if (Support.LiveBench.NoteDesync(frame))
+			{
+				IsOutOfSync = true;
+				return;
+			}
 
 			syncReport.DumpSyncReport(frame);
 			World.OutOfSync();

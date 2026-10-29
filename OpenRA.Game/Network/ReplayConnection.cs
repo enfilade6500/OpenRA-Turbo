@@ -30,6 +30,10 @@ namespace OpenRA.Network
 
 		public readonly int TickCount;
 		public readonly int FinalGameTick;
+
+		/// <summary>Every recorded order has been handed to the order manager. The recording client usually left before the
+		/// others' orders for the last few frames arrived, so the game stops a frame or two short of <see cref="TickCount"/>.</summary>
+		public bool AllOrdersDelivered => chunks.Count == 0;
 		public readonly bool IsValid;
 		public readonly Session LobbyInfo;
 		public readonly string Filename;

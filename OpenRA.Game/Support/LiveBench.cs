@@ -208,6 +208,12 @@ namespace OpenRA.Support
 			Active = true;
 			Live = args.GetValue("Bench.Live", "false").Equals("true", StringComparison.OrdinalIgnoreCase);
 			name = args.GetValue("Bench.Name", "bench");
+
+			// A replay run owns the camera. Until the mouse first moves over the window the game takes it to be at the
+			// top-left corner, which with edge scrolling on drags the view away between the bench's re-centrings - a
+			// visible shake, and frames spent re-uploading what moved. Off for the run (the settings file is not written)
+			if (!Live)
+				Game.Settings.Game.ViewportEdgeScroll = false;
 			warpToTick = ParseGameTime(args.GetValue("Bench.WarpTo", "0"));
 			durationTicks = ParseGameTime(args.GetValue("Bench.Duration", "0"));
 			logicFloorMs = Parse(args.GetValue("Bench.LogicMs", "0"));

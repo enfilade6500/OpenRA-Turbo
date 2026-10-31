@@ -27,13 +27,13 @@ for %%d in (%ME% stock) do (
   popd
 )
 
-rem The maps the replays need (Eight Chambers, Winterland 6v6, Eden 7v7), by uid from the resource centre, into the
+rem The maps the replays need (Eight Chambers, Winterland 6v6, Eden 7v7, the Pit), by uid from the resource centre, into the
 rem game's map folder - shared with the normal install, so the game content is already there
 set "SUP=%APPDATA%\OpenRA"
 if not exist "%SUP%" if exist "%USERPROFILE%\Documents\OpenRA" set "SUP=%USERPROFILE%\Documents\OpenRA"
 set "MAPS=%SUP%\maps\ra\release-20250330"
 if not exist "%MAPS%" mkdir "%MAPS%"
-for %%u in (7ea1a9ba559c9a02af9ead008386f0b08b0897ea 8c6685cd6792a808ecbab14aa0848d478a13583d b77d1fbd33d5690d6db32b4d987144efd33d0a0e) do (
+for %%u in (7ea1a9ba559c9a02af9ead008386f0b08b0897ea 8c6685cd6792a808ecbab14aa0848d478a13583d b77d1fbd33d5690d6db32b4d987144efd33d0a0e f4f1ed1f4cf0390d43a3868ed4d553f59926361c) do (
   if not exist "%MAPS%\%%u.oramap" curl -sSL -o "%MAPS%\%%u.oramap" "https://resource.openra.net/map/%%u" || echo could not fetch map %%u
 )
 echo == maps in %MAPS%

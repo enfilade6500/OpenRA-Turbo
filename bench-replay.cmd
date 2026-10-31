@@ -12,13 +12,12 @@ if "%~2"=="" (
 )
 set "REPLAY=%~f1"
 set "NAME=%~2"
+rem Everything after the name goes to the game as typed. cmd splits %3, %4... at "=" as well as at spaces, so the
+rem arguments are cut from the raw command line instead; it carries no quotes afterwards, so paths without spaces only.
+set "ARGS=%*"
+set "ARGS=%ARGS:"=%"
 set "REST="
-:collect
-if "%~3"=="" goto run
-set "REST=%REST% %3"
-shift /3
-goto collect
-:run
+for /f "tokens=2,* delims= " %%a in ("%ARGS%") do set "REST=%%b"
 cd /d "%~dp0"
 if not exist results\replay mkdir results\replay
 if exist RedAlert.exe (

@@ -22,21 +22,23 @@ echo == throughput: the whole replay, simulation as fast as it goes
 call bench-replay.cmd "%R%\eight-chambers.orarep" %LABEL%-%RUN%-A-thru Bench.Timestep=5 Debug.ForceFramerate=5
 call bench-replay.cmd "%R%\winterland.orarep"     %LABEL%-%RUN%-B-thru Bench.Timestep=5 Debug.ForceFramerate=5
 call bench-replay.cmd "%R%\eden.orarep"           %LABEL%-%RUN%-C-thru Bench.Timestep=5 Debug.ForceFramerate=5
+rem Drawn runs: no vsync (the wait for the screen blocks the loop and would count as render time) and at most 60 frames a second
+set "DISPLAY=Graphics.VSync=False Graphics.CapFramerate=True Graphics.MaxFramerate=60"
 echo == paced: the peak two minutes of each, played as a live game (stock: a frame after every tick; Turbo: its frame skipping at the install's floor)
-call bench-replay.cmd "%R%\eight-chambers.orarep" %LABEL%-%RUN%-A-paced Bench.Duration=3000t
-call bench-replay.cmd "%R%\winterland.orarep"     %LABEL%-%RUN%-B-paced Bench.WarpTo=11190t Bench.Duration=3000t
-call bench-replay.cmd "%R%\eden.orarep"           %LABEL%-%RUN%-C-paced Bench.WarpTo=9055t Bench.Duration=3000t
+call bench-replay.cmd "%R%\eight-chambers.orarep" %LABEL%-%RUN%-A-paced Bench.Duration=3000t %DISPLAY%
+call bench-replay.cmd "%R%\winterland.orarep"     %LABEL%-%RUN%-B-paced Bench.WarpTo=11190t Bench.Duration=3000t %DISPLAY%
+call bench-replay.cmd "%R%\eden.orarep"           %LABEL%-%RUN%-C-paced Bench.WarpTo=9055t Bench.Duration=3000t %DISPLAY%
 echo == fixed cadence: the Winterland and Eden windows drawn at exactly 20 and 15 frames a second
-call bench-replay.cmd "%R%\winterland.orarep"     %LABEL%-%RUN%-B-fps20 Bench.WarpTo=11190t Bench.Duration=3000t Debug.ForceFramerate=20
-call bench-replay.cmd "%R%\winterland.orarep"     %LABEL%-%RUN%-B-fps15 Bench.WarpTo=11190t Bench.Duration=3000t Debug.ForceFramerate=15
-call bench-replay.cmd "%R%\eden.orarep"           %LABEL%-%RUN%-C-fps20 Bench.WarpTo=9055t Bench.Duration=3000t Debug.ForceFramerate=20
-call bench-replay.cmd "%R%\eden.orarep"           %LABEL%-%RUN%-C-fps15 Bench.WarpTo=9055t Bench.Duration=3000t Debug.ForceFramerate=15
+call bench-replay.cmd "%R%\winterland.orarep"     %LABEL%-%RUN%-B-fps20 Bench.WarpTo=11190t Bench.Duration=3000t Debug.ForceFramerate=20 %DISPLAY%
+call bench-replay.cmd "%R%\winterland.orarep"     %LABEL%-%RUN%-B-fps15 Bench.WarpTo=11190t Bench.Duration=3000t Debug.ForceFramerate=15 %DISPLAY%
+call bench-replay.cmd "%R%\eden.orarep"           %LABEL%-%RUN%-C-fps20 Bench.WarpTo=9055t Bench.Duration=3000t Debug.ForceFramerate=20 %DISPLAY%
+call bench-replay.cmd "%R%\eden.orarep"           %LABEL%-%RUN%-C-fps15 Bench.WarpTo=9055t Bench.Duration=3000t Debug.ForceFramerate=15 %DISPLAY%
 if /i not "%~3"=="research" goto done
 echo == research runs: the Winterland window as an 85%% computer would play it (every logic tick padded to 47 ms against 40 ms ticks)
-call bench-replay.cmd "%R%\winterland.orarep"     %LABEL%-%RUN%-B-slow  Bench.WarpTo=11190t Bench.Duration=3000t Bench.LogicMs=47
+call bench-replay.cmd "%R%\winterland.orarep"     %LABEL%-%RUN%-B-slow  Bench.WarpTo=11190t Bench.Duration=3000t Bench.LogicMs=47 %DISPLAY%
 if not exist TURBO.md goto done
 echo == Turbo only: the 85%% computer with the frame-rate floor at 15, and with no frame skipping at all (stock's drawing)
-call bench-replay.cmd "%R%\winterland.orarep"     %LABEL%-%RUN%-B-slow15     Bench.WarpTo=11190t Bench.Duration=3000t Bench.LogicMs=47 Graphics.MinFramerate=15
-call bench-replay.cmd "%R%\winterland.orarep"     %LABEL%-%RUN%-B-slownoskip Bench.WarpTo=11190t Bench.Duration=3000t Bench.LogicMs=47 Bench.NoFrameSkip=true
+call bench-replay.cmd "%R%\winterland.orarep"     %LABEL%-%RUN%-B-slow15     Bench.WarpTo=11190t Bench.Duration=3000t Bench.LogicMs=47 Graphics.MinFramerate=15 %DISPLAY%
+call bench-replay.cmd "%R%\winterland.orarep"     %LABEL%-%RUN%-B-slownoskip Bench.WarpTo=11190t Bench.Duration=3000t Bench.LogicMs=47 Bench.NoFrameSkip=true %DISPLAY%
 :done
 echo == done: results\replay\%LABEL%-%RUN%-*

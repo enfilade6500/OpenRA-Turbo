@@ -419,8 +419,25 @@ namespace OpenRA.Traits
 			VisibilityHash = visibilityHashSum;
 
 			if (frozenActorsToRemove != null)
+			{
+				// Stock OpenRA finds the copies to drop by walking frozenActorsById and drops them in that order, and the
+				// order matters: the partition's per-bin dictionaries reuse freed slots, so the order copies leave in
+				// decides the order later ones are enumerated in, and a target scan that finds two candidates alike
+				// (same priority, same range) keeps the one it saw first. Every client must drop them in the same
+				// order, so a tick that drops more than one copy walks the dictionary here as well.
+				if (frozenActorsToRemove.Count > 1)
+				{
+					var inOrder = new List<FrozenActor>(frozenActorsToRemove.Count);
+					foreach (var fa in frozenActorsById.Values)
+						if (frozenActorsToRemove.Contains(fa))
+							inOrder.Add(fa);
+
+					frozenActorsToRemove = inOrder;
+				}
+
 				foreach (var fa in frozenActorsToRemove)
 					Remove(fa);
+			}
 		}
 
 		public virtual IEnumerable<IRenderable> Render(Actor self, WorldRenderer wr)

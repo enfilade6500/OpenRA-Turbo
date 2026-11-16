@@ -148,7 +148,13 @@ the copy's own tick) and ticks only the copies with something to do: a flash, a 
 (the shroud callback already names them), or an actor that has died or been disposed
 (`FrozenUnderFog` tells the copies). The sums are published at tick time exactly as the walk
 computed them — the copies present during the tick, those visible after it — so the hashes are
-bit-identical, which the replay check confirms. `FrozenUnderFog` keeps one "someone is waiting"
+bit-identical, which the replay check confirms. One more thing here is state the simulation can
+see: the order in which a tick's dead copies leave the layer. The partition's per-bin
+dictionaries reuse freed slots, so that order decides the order later copies are enumerated in,
+and a target scan that finds two candidates alike (same priority, same range) keeps the one it
+saw first. Stock drops them in the order of its walk; a tick that drops more than one copy
+therefore walks the dictionary to drop them in that order (found through a real desync; see
+"Caveats"). `FrozenUnderFog` keeps one "someone is waiting"
 flag, set by the copies themselves, and drops out of the render tick while it is clear. Upstream's
 open pull request #22420 is after the same cost with a different approach (see "Relation to
 upstream OpenRA").
@@ -170,7 +176,9 @@ same game (ticks 18,000–24,000, nine to twelve minutes in, the armies fighting
 with 1.0, 15.9 with 1.1 (actors 4.2, traits 4.8, effects 0.7, sync 2.5, render tick 1.1). With
 the real game content installed, 1.1 played the whole replay — 26,913 ticks, to the last frame
 the recording holds — in sync with the recorded hashes, and the whole Pit replay below (85,644
-ticks) likewise.
+ticks) likewise. A client replay of a 16-minute 3v3 on Derisive among stock clients, in which an
+earlier 1.1 build had gone out of sync fifteen minutes in (see "Caveats"), plays to its end in
+sync as well.
 
 Both builds show the same five or six 250–390 ms hitches over those 6,000 late-game ticks, about
 one every 1,100 ticks: the bench's new `gc_pause_ms` column puts every one of them inside a
@@ -377,8 +385,15 @@ reading theirs, from the profile of one map, but the problem was theirs to name.
 
 ## Caveats
 
-- A real desync would show as the usual "out of sync" drop, for the player running this client.
-  The replay evidence is strong; a small game before a big one is still sensible.
+- A real desync shows as the usual "out of sync" drop — for everyone in the game, not only the
+  player running this client. It happened once, on 2026-11-15 (Derisive 3v3, a 1.1 build, 15
+  minutes in): one tick had dropped two frozen copies in the opposite order from stock, which
+  changed the order a later target scan saw two equal candidates in; an artillery piece shot the
+  other one a few ticks later and the shared random stream was four draws out. The client's own
+  replay reproduced it to the bit, and the fix (dropping in stock's order) plays that replay in
+  sync to the end; the other orderings the 1.1 work changes were then read against stock's. 1.0
+  does not have the event-driven layer and was never affected. A new build still earns a small
+  game before a big one.
 - A trait that stops being ticked (1.1) and misses its wake-up would show a stale health bar, a
   wall drawn with an old connection, or a still animation one change behind; none of it reaches
   the simulation. Nothing of the kind has been seen; if it is, the actor type and what was done
